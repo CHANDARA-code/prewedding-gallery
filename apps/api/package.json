@@ -17,8 +17,8 @@
     "openapi:export": "ts-node -r tsconfig-paths/register src/openapi-export.ts",
     "bench": "ts-node bench/bench.ts",
     "test": "jest --runInBand",
-    "user:create": "ts-node -r tsconfig-paths/register src/db/create-user.ts",
-    "watchdog": "ts-node src/alerts/watchdog.ts"
+    "watchdog": "ts-node src/alerts/watchdog.ts",
+    "users": "ts-node -r tsconfig-paths/register src/db/users-cli.ts"
   },
   "dependencies": {
     "@nestjs/cache-manager": "^3.0.1",
