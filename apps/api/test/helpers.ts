@@ -24,7 +24,7 @@ export interface TestCtx {
   close(): Promise<void>;
 }
 
-export async function createTestApp(): Promise<TestCtx> {
+export async function createTestApp(env: Record<string, string> = {}): Promise<TestCtx> {
   const dir = mkdtempSync(join(tmpdir(), 'pw-test-'));
   const uploadDir = join(dir, 'uploads');
   const config = loadConfig({
@@ -33,6 +33,7 @@ export async function createTestApp(): Promise<TestCtx> {
     DATABASE_URL: join(dir, 'test.db'),
     UPLOAD_DIR: uploadDir,
     WEB_ORIGIN: 'http://localhost:5173',
+    ...env,
   });
   const moduleRef = await Test.createTestingModule({ imports: [AppModule.forRoot(config)] }).compile();
   const app = moduleRef.createNestApplication<NestExpressApplication>({ logger: false });
