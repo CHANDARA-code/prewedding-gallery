@@ -1,6 +1,6 @@
 ---
 title: Authentication
-description: JWT bearer tokens, token lifetime and what each role can call.
+description: JWT bearer tokens, token lifetime, roles, permissions and what each can call.
 ---
 
 ## Getting a token
@@ -12,11 +12,14 @@ description: JWT bearer tokens, token lifetime and what each role can call.
   "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "tokenType": "Bearer",
   "expiresIn": 3600,
-  "user": { "id": 1, "username": "demo", "role": "user" }
+  "user": { "id": 1, "username": "demo", "role": "user", "permissions": [] }
 }
 ```
 
-- Tokens are JWTs signed with HS256. The payload is `{ sub, username, role }`.
+- Tokens are JWTs signed with HS256. The payload is `{ sub, username, role, ver }`.
+- Usernames are case-insensitive (stored lowercase).
+- Every authenticated request re-reads the account, so role and permission changes apply immediately. Disabling an
+  account or resetting its password bumps `ver` and ends all its existing sessions (`401`).
 - The default lifetime is **1 hour** (`expiresIn` is in seconds). There are no refresh tokens: log in again when a
   request returns `401`.
 - Wrong credentials return `401` with a generic message, whether or not the username exists.
@@ -34,18 +37,50 @@ curl https://prewedding.leavchandara.com/api/v1/auth/me \
 Public photo endpoints (`GET /photos`, `GET /photos/{id}`) accept requests **with or without** a token. With a valid
 token they add the per-user `isFavorite` and `isSaved` flags to each photo.
 
+## Roles and permissions
+
+There are two roles. **Admins** have every permission. A **user** can always browse, favorite, save, share and
+download, and an admin can grant them any of these extra permissions:
+
+| Permission | Allows |
+|---|---|
+| `photos.upload` | `POST /admin/photos` |
+| `photos.edit` | `PATCH /admin/photos/{id}`, `POST /admin/photos/{id}/rotate` |
+| `photos.delete` | `GET /admin/photos` (trash view), `DELETE /admin/photos/{id}`, `POST /admin/photos/{id}/restore`, opening trashed photos |
+| `photos.purge` | `DELETE /admin/photos/{id}/permanent` |
+| `photos.export` | `GET /admin/photos/export.csv` |
+| `users.manage` | `/admin/users/*`, **admin role only**, cannot be granted |
+
+`GET /auth/me` and the login response return the effective `permissions` array.
+
+## Managing users
+
+Admins manage accounts from **account menu → Manage users** in the web app, or through the API:
+
+| Endpoint | Does |
+|---|---|
+| `GET /admin/users` | List accounts with role, grants, effective permissions, status, last login and upload count |
+| `GET /admin/users/permissions` | Permission catalogue with labels |
+| `POST /admin/users` | `{ username, role, grants?, password? }`. Omit `password` to get a `generatedPassword` back once |
+| `PATCH /admin/users/{id}` | `{ role?, grants?, disabled? }` |
+| `POST /admin/users/{id}/password` | `{ password? }`. Resets it (generated when omitted) and signs the user out everywhere |
+| `DELETE /admin/users/{id}` | Deletes the account with its favorites and saves. `409` if it uploaded photos: disable it instead |
+
+Admins cannot demote, disable or delete themselves, and the last active admin can't be removed (`403`).
+
 ## Role matrix
 
 | Endpoint | Guest | User | Admin |
 |---|:-:|:-:|:-:|
 | `POST /auth/login` | ✅ | ✅ | ✅ |
 | `GET /auth/me` | `401` | ✅ | ✅ |
-| `GET /photos`, `GET /photos/{id}` | ✅ | ✅ (with flags) | ✅ (can view deleted) |
+| `GET /photos`, `GET /photos/{id}` | ✅ | ✅ (with flags; deleted ones with `photos.delete`) | ✅ (can view deleted) |
 | `GET /me/favorites`, `GET /me/saves` | `401` | ✅ | ✅ |
 | `PUT` / `DELETE /photos/{id}/favorite` and `/save` | `401` | ✅ | ✅ |
-| `/admin/*` | `401` | `403` | ✅ |
+| `/admin/photos/*` | `401` | per granted permission, else `403` | ✅ |
+| `/admin/users/*` | `401` | `403` | ✅ |
 
-Admin routes are enforced on the server for every request, not just hidden in the UI.
+Permissions are enforced on the server for every request, not just hidden in the UI.
 
 ## Caching note
 

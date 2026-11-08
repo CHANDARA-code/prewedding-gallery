@@ -78,10 +78,20 @@ pm2 startOrReload ecosystem.config.cjs --update-env    # migrations run on start
 
 Login protection: 5 attempts/min per IP, and 5 failures for one username from one IP within 15 min lock that pair for 15 min.
 
-Accounts: there is no self-registration and the demo seed is blocked in production. Create or reset users with:
+Accounts: there is no self-registration and the demo seed is blocked in production. Admins manage users in the web
+app (account menu → **Manage users**): create accounts with a role and permissions, reset passwords, disable or
+delete. The same rules are available from the shell:
 
 ```bash
-cd apps/api && DOTENV_CONFIG_PATH=.env.production node dist/db/create-user.js <name> [user|admin]
+cd apps/api
+U="node -r dotenv/config dist/db/users-cli.js"; E="dotenv_config_path=.env.production"
+$U list $E
+$U create dara user --grant photos.upload,photos.export $E   # or: create tithya admin
+$U set dara --role admin $E                                   # --grant a,b|none  --disable  --enable
+$U reset-password dara $E
+$U delete dara $E
+$U permissions $E
 ```
 
-Set `NEW_PASSWORD` to choose the password; otherwise a random one is printed.
+Set `NEW_PASSWORD` to choose the password; otherwise a strong one is generated and printed once. Admins have every
+permission; users can be granted `photos.upload`, `photos.edit`, `photos.delete`, `photos.purge`, `photos.export`.

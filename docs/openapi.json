@@ -309,7 +309,7 @@
             }
           },
           "403": {
-            "description": "Not an admin",
+            "description": "Missing the permission this action needs (admins have all of them)",
             "content": {
               "application/json": {
                 "schema": {
@@ -395,7 +395,7 @@
             }
           },
           "403": {
-            "description": "Not an admin",
+            "description": "Missing the permission this action needs (admins have all of them)",
             "content": {
               "application/json": {
                 "schema": {
@@ -464,7 +464,7 @@
             }
           },
           "403": {
-            "description": "Not an admin",
+            "description": "Missing the permission this action needs (admins have all of them)",
             "content": {
               "application/json": {
                 "schema": {
@@ -541,7 +541,7 @@
             }
           },
           "403": {
-            "description": "Not an admin",
+            "description": "Missing the permission this action needs (admins have all of them)",
             "content": {
               "application/json": {
                 "schema": {
@@ -606,7 +606,7 @@
             }
           },
           "403": {
-            "description": "Not an admin",
+            "description": "Missing the permission this action needs (admins have all of them)",
             "content": {
               "application/json": {
                 "schema": {
@@ -683,7 +683,7 @@
             }
           },
           "403": {
-            "description": "Not an admin",
+            "description": "Missing the permission this action needs (admins have all of them)",
             "content": {
               "application/json": {
                 "schema": {
@@ -750,7 +750,7 @@
             }
           },
           "403": {
-            "description": "Not an admin",
+            "description": "Missing the permission this action needs (admins have all of them)",
             "content": {
               "application/json": {
                 "schema": {
@@ -810,7 +810,7 @@
             }
           },
           "403": {
-            "description": "Not an admin",
+            "description": "Missing the permission this action needs (admins have all of them)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1160,6 +1160,396 @@
           "Saves"
         ]
       }
+    },
+    "/api/v1/admin/users/permissions": {
+      "get": {
+        "description": "Every permission with a label. Admins have all of them; `grantable` ones can be given to a user role.",
+        "operationId": "UsersController_permissions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PermissionInfoDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not an admin, or a self-lockout / last-admin rule was hit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Permission catalogue",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/api/v1/admin/users": {
+      "get": {
+        "description": "Admins first, then by username.",
+        "operationId": "UsersController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UserAdminDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not an admin, or a self-lockout / last-admin rule was hit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List users",
+        "tags": [
+          "Users"
+        ]
+      },
+      "post": {
+        "description": "Creates an account with a role and optional extra permissions. Omit `password` to get a generated one back (shown once).",
+        "operationId": "UsersController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserWithPasswordDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not an admin, or a self-lockout / last-admin rule was hit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Username taken",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create user",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/api/v1/admin/users/{id}": {
+      "patch": {
+        "description": "Changes apply to the user’s next request. Disabling signs them out everywhere. You cannot demote or disable yourself, and there must always be one active admin.",
+        "operationId": "UsersController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserAdminDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not an admin, or a self-lockout / last-admin rule was hit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update role, permissions or status",
+        "tags": [
+          "Users"
+        ]
+      },
+      "delete": {
+        "description": "Deletes the account with its favorites and saves. Accounts that uploaded photos can only be disabled (409).",
+        "operationId": "UsersController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not an admin, or a self-lockout / last-admin rule was hit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "User has uploaded photos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete user",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/api/v1/admin/users/{id}/password": {
+      "post": {
+        "description": "Sets the given password, or generates one when omitted (returned once). Signs the user out of every device.",
+        "operationId": "UsersController_resetPassword",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserWithPasswordDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not an admin, or a self-lockout / last-admin rule was hit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Reset password",
+        "tags": [
+          "Users"
+        ]
+      }
     }
   },
   "info": {
@@ -1223,12 +1613,29 @@
               "admin"
             ],
             "example": "user"
+          },
+          "permissions": {
+            "type": "array",
+            "example": [],
+            "description": "Effective permissions. Admins have all of them; users only those granted. Viewing, favorites, saves and sharing need none.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "photos.upload",
+                "photos.edit",
+                "photos.delete",
+                "photos.purge",
+                "photos.export",
+                "users.manage"
+              ]
+            }
           }
         },
         "required": [
           "id",
           "username",
-          "role"
+          "role",
+          "permissions"
         ]
       },
       "LoginResponseDto": {
@@ -1485,6 +1892,209 @@
         "required": [
           "degrees"
         ]
+      },
+      "PermissionInfoDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "example": "photos.upload"
+          },
+          "label": {
+            "type": "string",
+            "example": "Upload photos"
+          },
+          "grantable": {
+            "type": "boolean",
+            "description": "False for admin-only permissions (users.manage)"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "grantable"
+        ]
+      },
+      "UserAdminDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 3
+          },
+          "username": {
+            "type": "string",
+            "example": "dara"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "admin"
+            ],
+            "example": "user"
+          },
+          "grants": {
+            "type": "array",
+            "example": [
+              "photos.upload"
+            ],
+            "description": "Extra actions granted to a user role. Ignored for admins.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "photos.upload",
+                "photos.edit",
+                "photos.delete",
+                "photos.purge",
+                "photos.export"
+              ]
+            }
+          },
+          "permissions": {
+            "type": "array",
+            "example": [
+              "photos.upload"
+            ],
+            "description": "What the account can actually do.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "photos.upload",
+                "photos.edit",
+                "photos.delete",
+                "photos.purge",
+                "photos.export",
+                "users.manage"
+              ]
+            }
+          },
+          "disabled": {
+            "type": "boolean",
+            "example": false
+          },
+          "createdAt": {
+            "type": "string",
+            "example": "2026-11-08T03:00:00.000Z"
+          },
+          "lastLoginAt": {
+            "type": "string",
+            "example": null,
+            "nullable": true
+          },
+          "photosUploaded": {
+            "type": "number",
+            "example": 0
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "role",
+          "grants",
+          "permissions",
+          "disabled",
+          "createdAt",
+          "lastLoginAt",
+          "photosUploaded"
+        ]
+      },
+      "CreateUserDto": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "example": "dara",
+            "description": "Stored lowercase. 2-32 characters: letters, digits, dot, dash, underscore."
+          },
+          "password": {
+            "type": "string",
+            "description": "8-128 characters. Omit to have a strong one generated."
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "admin"
+            ],
+            "example": "user"
+          },
+          "grants": {
+            "type": "array",
+            "example": [
+              "photos.upload"
+            ],
+            "items": {
+              "type": "string",
+              "enum": [
+                "photos.upload",
+                "photos.edit",
+                "photos.delete",
+                "photos.purge",
+                "photos.export"
+              ]
+            }
+          }
+        },
+        "required": [
+          "username",
+          "role"
+        ]
+      },
+      "UserWithPasswordDto": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/UserAdminDto"
+          },
+          "generatedPassword": {
+            "type": "string",
+            "example": "q8Zr0f2KxN4bYw1c",
+            "description": "Present only when the server generated the password. Shown once; it is not stored."
+          }
+        },
+        "required": [
+          "user"
+        ]
+      },
+      "UpdateUserDto": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "admin"
+            ]
+          },
+          "grants": {
+            "type": "array",
+            "description": "Replaces the grant list.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "photos.upload",
+                "photos.edit",
+                "photos.delete",
+                "photos.purge",
+                "photos.export"
+              ]
+            }
+          },
+          "disabled": {
+            "type": "boolean",
+            "description": "Disabling signs the account out everywhere and blocks login."
+          }
+        }
+      },
+      "ResetPasswordDto": {
+        "type": "object",
+        "properties": {
+          "password": {
+            "type": "string",
+            "description": "8-128 characters. Omit to have a strong one generated."
+          }
+        }
       }
     }
   }
