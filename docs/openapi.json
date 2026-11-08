@@ -269,7 +269,7 @@
     },
     "/api/v1/admin/photos/export.csv": {
       "get": {
-        "description": "One row per photo with the original file name, stored file name, title, caption, size, dimensions, orientation, camera EXIF, uploader, dates and favorite/save counts. UTF-8 with BOM (opens correctly in Excel).",
+        "description": "One row per photo: source zip, original file name, detail link, favorite/save counts and who favorited/saved it, then title, caption, size, dimensions, camera EXIF, uploader and dates. `collection=favorites|saves` keeps only photos someone favorited/saved (`mine=true`: only yours). UTF-8 with BOM (opens correctly in Excel).",
         "operationId": "AdminPhotosController_exportCsv",
         "parameters": [
           {
@@ -284,6 +284,31 @@
                 "deleted",
                 "all"
               ]
+            }
+          },
+          {
+            "name": "collection",
+            "required": false,
+            "in": "query",
+            "description": "Only photos someone favorited / saved.",
+            "schema": {
+              "default": "all",
+              "type": "string",
+              "enum": [
+                "all",
+                "favorites",
+                "saves"
+              ]
+            }
+          },
+          {
+            "name": "mine",
+            "required": false,
+            "in": "query",
+            "description": "With `collection`: only your own favorites / saves.",
+            "schema": {
+              "default": false,
+              "type": "boolean"
             }
           }
         ],
