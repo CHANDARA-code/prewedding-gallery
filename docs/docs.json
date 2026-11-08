@@ -1,0 +1,28 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Pre-Wedding View API",
+  "colors": { "primary": "#C2185B", "light": "#E8799F", "dark": "#9C1149" },
+  "favicon": "/favicon.svg",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Guides",
+        "groups": [
+          { "group": "Getting started", "pages": ["introduction", "quickstart"] },
+          { "group": "Concepts", "pages": ["authentication", "pagination", "errors"] }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "openapi": "openapi.json"
+      }
+    ]
+  },
+  "api": {
+    "playground": { "display": "interactive" }
+  },
+  "navbar": {
+    "primary": { "type": "button", "label": "Open gallery", "href": "https://prewedding.leavchandara.com" }
+  }
+}

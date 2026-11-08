@@ -1,0 +1,83 @@
+---
+title: Quickstart
+description: Log in, list photos and favorite one in three requests.
+---
+
+<Warning>
+  The `demo` / `password` and `admin` / `password` accounts exist **only in development and demo databases**. They are public
+  knowledge, so the seed script refuses to create them in production unless `ALLOW_DEMO_SEED=true`. Use your own
+  credentials against a production server.
+</Warning>
+
+Set the base URL once:
+
+```bash
+export API=https://prewedding.leavchandara.com/api/v1
+```
+
+<Steps>
+  <Step title="Log in">
+    Exchange a username and password for a JWT.
+
+    ```bash
+    TOKEN=$(curl -s -X POST "$API/auth/login" \
+      -H 'Content-Type: application/json' \
+      -d '{"username":"demo","password":"password"}' | jq -r .accessToken)
+    echo "$TOKEN"
+    ```
+
+    ```json Response
+    {
+      "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+      "tokenType": "Bearer",
+      "expiresIn": 3600,
+      "user": { "id": 1, "username": "demo", "role": "user" }
+    }
+    ```
+  </Step>
+
+  <Step title="List photos">
+    The first page of the newest photos. With a token, each photo also carries `isFavorite` and `isSaved`.
+
+    ```bash
+    curl -s "$API/photos?limit=3" -H "Authorization: Bearer $TOKEN" | jq
+    ```
+
+    ```json Response
+    {
+      "items": [
+        {
+          "id": 12,
+          "title": "Golden hour",
+          "caption": "Angkor Wat, sunrise",
+          "url": "/uploads/8f2c1a.jpg",
+          "thumbUrl": "/uploads/thumbs/8f2c1a.webp",
+          "width": 3000,
+          "height": 2000,
+          "createdAt": "2026-11-01T08:30:00.000Z",
+          "isFavorite": false,
+          "isSaved": false
+        }
+      ],
+      "nextCursor": "eyJpZCI6MTJ9",
+      "hasMore": true
+    }
+    ```
+  </Step>
+
+  <Step title="Favorite a photo">
+    `PUT` is idempotent: favoriting twice is fine.
+
+    ```bash
+    curl -s -X PUT "$API/photos/12/favorite" -H "Authorization: Bearer $TOKEN" -o /dev/null -w '%{http_code}\n'
+    ```
+
+    Then list your favorites, most recently favorited first:
+
+    ```bash
+    curl -s "$API/me/favorites" -H "Authorization: Bearer $TOKEN" | jq '.items[].id'
+    ```
+  </Step>
+</Steps>
+
+Next: walk every page with [cursor pagination](/pagination).

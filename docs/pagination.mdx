@@ -1,0 +1,60 @@
+---
+title: Pagination
+description: Every list endpoint uses opaque cursors, built for infinite scroll.
+---
+
+`GET /photos`, `GET /me/favorites`, `GET /me/saves` and `GET /admin/photos` use **cursor (keyset) pagination**.
+
+## Request
+
+| Query param | Type | Default | Notes |
+|---|---|---|---|
+| `limit` | integer | `24` | Clamped to `1`–`60` on the server. |
+| `cursor` | string | none | The `nextCursor` from the previous response. Omit it for the first page. |
+
+## Response
+
+```json
+{ "items": [ /* Photo */ ], "nextCursor": "eyJpZCI6MTAwfQ", "hasMore": true }
+```
+
+- `nextCursor` is `null` and `hasMore` is `false` on the last page.
+- Treat the cursor as **opaque**. Don't build or edit it. A malformed, tampered or wrong-endpoint cursor returns `400`.
+
+## Ordering
+
+| Endpoint | Order |
+|---|---|
+| `GET /photos`, `GET /admin/photos` | Newest upload first |
+| `GET /me/favorites` | Most recently favorited first |
+| `GET /me/saves` | Most recently saved first |
+
+## Why there is no `total`
+
+Counting every matching row costs a full scan on each request, and an infinite-scrolling client doesn't need it.
+Use `hasMore` to decide whether to load another page.
+
+## Why cursors instead of page numbers
+
+- **Stable while things change.** A cursor points at a specific photo, so photos uploaded or deleted while someone is
+  scrolling don't cause duplicates or skipped photos, which page offsets would.
+- **Flat cost.** Page 400 is as fast as page 1. With offsets the database walks and discards every earlier row.
+
+## Walking every page
+
+```bash
+API=https://prewedding.leavchandara.com/api/v1
+cursor=""
+page=0
+while : ; do
+  if [ -z "$cursor" ]; then
+    res=$(curl -s "$API/photos?limit=60")
+  else
+    res=$(curl -s -G "$API/photos" --data-urlencode "limit=60" --data-urlencode "cursor=$cursor")
+  fi
+  page=$((page + 1))
+  echo "page $page: $(echo "$res" | jq '.items | length') photos"
+  [ "$(echo "$res" | jq -r .hasMore)" = "true" ] || break
+  cursor=$(echo "$res" | jq -r .nextCursor)
+done
+```

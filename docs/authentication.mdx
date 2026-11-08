@@ -1,0 +1,54 @@
+---
+title: Authentication
+description: JWT bearer tokens, token lifetime and what each role can call.
+---
+
+## Getting a token
+
+`POST /auth/login` with a JSON body `{ "username": "...", "password": "..." }` returns:
+
+```json
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "tokenType": "Bearer",
+  "expiresIn": 3600,
+  "user": { "id": 1, "username": "demo", "role": "user" }
+}
+```
+
+- Tokens are JWTs signed with HS256. The payload is `{ sub, username, role }`.
+- The default lifetime is **1 hour** (`expiresIn` is in seconds). There are no refresh tokens: log in again when a
+  request returns `401`.
+- Wrong credentials return `401` with a generic message, whether or not the username exists.
+- Login is rate limited to **5 attempts per minute per IP**. Further attempts return `429`.
+
+## Sending the token
+
+Send it in the `Authorization` header on every request:
+
+```bash
+curl https://prewedding.leavchandara.com/api/v1/auth/me \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Public photo endpoints (`GET /photos`, `GET /photos/{id}`) accept requests **with or without** a token. With a valid
+token they add the per-user `isFavorite` and `isSaved` flags to each photo.
+
+## Role matrix
+
+| Endpoint | Guest | User | Admin |
+|---|:-:|:-:|:-:|
+| `POST /auth/login` | ✅ | ✅ | ✅ |
+| `GET /auth/me` | `401` | ✅ | ✅ |
+| `GET /photos`, `GET /photos/{id}` | ✅ | ✅ (with flags) | ✅ (can view deleted) |
+| `GET /me/favorites`, `GET /me/saves` | `401` | ✅ | ✅ |
+| `PUT` / `DELETE /photos/{id}/favorite` and `/save` | `401` | ✅ | ✅ |
+| `/admin/*` | `401` | `403` | ✅ |
+
+Admin routes are enforced on the server for every request, not just hidden in the UI.
+
+## Caching note
+
+List responses for requests **without** `Authorization` are publicly cacheable for 30 seconds
+(`Cache-Control: public, max-age=30, stale-while-revalidate=60`, `Vary: Authorization`). Responses to requests with a
+token are `private, no-cache`, and `/me/*` and `/admin/*` are `no-store`.

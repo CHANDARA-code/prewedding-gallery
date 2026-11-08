@@ -1,0 +1,47 @@
+---
+title: Introduction
+description: A REST API for browsing, favoriting and saving pre-wedding photos.
+---
+
+The Pre-Wedding View API powers the photo gallery at [prewedding.leavchandara.com](https://prewedding.leavchandara.com).
+Anyone can browse photos. Logged-in users keep personal **Favorite** and **Save** collections. An admin uploads photos and
+can soft delete, restore or permanently delete them.
+
+## Base URL
+
+```text
+https://prewedding.leavchandara.com/api/v1
+```
+
+All requests and responses use JSON, except photo upload, which uses `multipart/form-data`.
+Image files are served from `/uploads/*` on the same host (for example
+`https://prewedding.leavchandara.com/uploads/thumbs/8f2c1a.webp`).
+
+## Roles
+
+| Role | Can do |
+|---|---|
+| **Guest** (no token) | List and view active photos. |
+| **User** | Everything a guest can, plus favorite and save photos and list their own favorites and saves. |
+| **Admin** | Everything a user can, plus upload, edit, soft delete, restore and permanently delete photos, and view deleted photos. |
+
+## Resources
+
+| Area | Endpoints |
+|---|---|
+| Auth | `POST /auth/login`, `GET /auth/me` |
+| Photos (public) | `GET /photos`, `GET /photos/{id}` |
+| Favorites | `GET /me/favorites`, `PUT` / `DELETE /photos/{id}/favorite` |
+| Saves | `GET /me/saves`, `PUT` / `DELETE /photos/{id}/save` |
+| Admin | `GET` / `POST /admin/photos`, `PATCH` / `DELETE /admin/photos/{id}`, `POST /admin/photos/{id}/restore`, `DELETE /admin/photos/{id}/permanent` |
+
+Every list endpoint uses [cursor pagination](/pagination). Errors share [one shape](/errors).
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Log in, list photos and favorite one with `curl`.
+  </Card>
+  <Card title="Authentication" icon="key" href="/authentication">
+    JWT bearer tokens, lifetime and the role matrix.
+  </Card>
+</CardGroup>
