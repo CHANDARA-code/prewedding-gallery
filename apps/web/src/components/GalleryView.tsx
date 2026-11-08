@@ -1,4 +1,5 @@
-import { ReactNode, useCallback, useMemo, useRef, useState } from 'react';
+import { ReactNode, useCallback, useMemo, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button, Divider, Empty, Result } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import { flattenPages, usePhotoList } from '../api/photos';
@@ -8,7 +9,7 @@ import { useColumns } from '../hooks/useColumns';
 import { supportsIntersectionObserver, useInfiniteSentinel } from '../hooks/useInfiniteSentinel';
 import { useScrollMemory } from '../hooks/useScrollMemory';
 import { GridSkeleton, PhotoGrid } from './PhotoGrid';
-import { Lightbox } from './Lightbox';
+import { PhotoViewer } from './PhotoViewer';
 
 interface Props {
   scope: Scope;
@@ -23,8 +24,11 @@ export function GalleryView({ scope, status, empty }: Props) {
     query;
   const photos = useMemo(() => flattenPages(data), [data]);
 
-  const [lightboxOpen, setLightboxOpen] = useState(false);
-  const [current, setCurrent] = useState(0);
+  // The open photo lives in the URL (?photo=<id>): the back button closes the viewer, and links work.
+  const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
+  const viewerId = Number(params.get('photo')) || null;
+  const pushedViewer = useRef(false);
 
   const sentinelRef = useRef<HTMLDivElement>(null);
   const loadMore = useCallback(() => fetchNextPage(), [fetchNextPage]);
@@ -38,73 +42,110 @@ export function GalleryView({ scope, status, empty }: Props) {
 
   useScrollMemory(`${scope}:${status ?? ''}`, photos.length > 0);
 
-  const openAt = useCallback((index: number) => {
-    setCurrent(index);
-    setLightboxOpen(true);
-  }, []);
+  const setPhotoParam = useCallback(
+    (id: number | null, replace: boolean) =>
+      setParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (id === null) next.delete('photo');
+          else next.set('photo', String(id));
+          return next;
+        },
+        { replace, preventScrollReset: true },
+      ),
+    [setParams],
+  );
 
-  if (isPending) return <GridSkeleton columns={columns} rows={4} />;
+  const openAt = useCallback(
+    (index: number) => {
+      const photo = photos[index];
+      if (!photo) return;
+      pushedViewer.current = true;
+      setPhotoParam(photo.id, false);
+    },
+    [photos, setPhotoParam],
+  );
+  const showPhoto = useCallback((id: number) => setPhotoParam(id, true), [setPhotoParam]);
+  const closeViewer = useCallback(() => {
+    // Opened from the grid: go back (so Back/Forward stay natural). Opened from a link: drop the param.
+    if (pushedViewer.current) navigate(-1);
+    else setPhotoParam(null, true);
+    pushedViewer.current = false;
+  }, [navigate, setPhotoParam]);
 
-  // First-page failure (no photos to keep on screen).
-  if (isError && photos.length === 0) {
-    return (
-      <Result
-        status="warning"
-        title="Couldn't load photos"
-        subTitle={errorMessage(error, 'Please check your connection and try again.')}
-        extra={
-          <Button type="primary" icon={<ReloadOutlined aria-hidden />} onClick={() => refetch()}>
-            Retry
-          </Button>
-        }
-      />
-    );
-  }
+  const viewer = viewerId !== null && (
+    <PhotoViewer
+      photos={photos}
+      photoId={viewerId}
+      onNavigate={showPhoto}
+      onClose={closeViewer}
+      hasNextPage={Boolean(hasNextPage)}
+      isFetchingNextPage={isFetchingNextPage}
+      fetchNextPage={loadMore}
+    />
+  );
 
-  if (photos.length === 0) return <div className="center-state">{empty}</div>;
-
+  // The viewer always renders at the same tree position, so it keeps its state while the list loads.
   return (
     <>
-      <PhotoGrid photos={photos} columns={columns} onOpen={openAt} />
-
-      {isFetchingNextPage && <GridSkeleton columns={columns} rows={1} />}
-
-      <div ref={sentinelRef} className="sentinel" aria-hidden />
-
-      {isFetchNextPageError ? (
-        <div className="list-footer">
-          <Button icon={<ReloadOutlined aria-hidden />} onClick={() => fetchNextPage()}>
-            Couldn't load more photos. Retry
-          </Button>
-        </div>
-      ) : hasNextPage ? (
-        <div className="list-footer">
-          <Button
-            className={ioSupported ? 'visually-hidden-focusable' : undefined}
-            onClick={() => fetchNextPage()}
-            disabled={isFetchingNextPage}
-          >
-            Load more
-          </Button>
-        </div>
-      ) : (
-        <Divider plain className="end-divider">
-          You've reached the end
-        </Divider>
-      )}
-
-      <Lightbox
-        photos={photos}
-        open={lightboxOpen}
-        current={Math.min(current, Math.max(0, photos.length - 1))}
-        onChange={setCurrent}
-        onClose={() => setLightboxOpen(false)}
-        hasNextPage={Boolean(hasNextPage)}
-        isFetchingNextPage={isFetchingNextPage}
-        fetchNextPage={loadMore}
-      />
+      {renderContent()}
+      {viewer}
     </>
   );
+
+  function renderContent() {
+    if (isPending) return <GridSkeleton columns={columns} rows={4} />;
+
+    // First-page failure (no photos to keep on screen).
+    if (isError && photos.length === 0) {
+      return (
+        <Result
+          status="warning"
+          title="Couldn't load photos"
+          subTitle={errorMessage(error, 'Please check your connection and try again.')}
+          extra={
+            <Button type="primary" icon={<ReloadOutlined aria-hidden />} onClick={() => refetch()}>
+              Retry
+            </Button>
+          }
+        />
+      );
+    }
+
+    if (photos.length === 0) return <div className="center-state">{empty}</div>;
+
+    return (
+      <>
+        <PhotoGrid photos={photos} columns={columns} onOpen={openAt} />
+
+        {isFetchingNextPage && <GridSkeleton columns={columns} rows={1} />}
+
+        <div ref={sentinelRef} className="sentinel" aria-hidden />
+
+        {isFetchNextPageError ? (
+          <div className="list-footer">
+            <Button icon={<ReloadOutlined aria-hidden />} onClick={() => fetchNextPage()}>
+              Couldn't load more photos. Retry
+            </Button>
+          </div>
+        ) : hasNextPage ? (
+          <div className="list-footer">
+            <Button
+              className={ioSupported ? 'visually-hidden-focusable' : undefined}
+              onClick={() => fetchNextPage()}
+              disabled={isFetchingNextPage}
+            >
+              Load more
+            </Button>
+          </div>
+        ) : (
+          <Divider plain className="end-divider">
+            You've reached the end
+          </Divider>
+        )}
+      </>
+    );
+  }
 }
 
 export const emptyStates = {

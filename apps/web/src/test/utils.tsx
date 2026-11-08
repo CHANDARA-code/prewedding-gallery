@@ -51,7 +51,9 @@ export function makePhoto(id: number, extra: Partial<Photo> = {}): Photo {
     title: null,
     caption: null,
     url: `/uploads/${id}.jpg`,
+    previewUrl: `/uploads/previews/${id}.webp`,
     thumbUrl: `/uploads/thumbs/${id}.webp`,
+    rotation: 0,
     width: 3000,
     height: 2000,
     createdAt: '2026-11-01T08:30:00.000Z',
@@ -67,11 +69,15 @@ export function page(ids: number[], nextCursor: string | null, extra: Partial<Ph
 export const range = (from: number, to: number) => Array.from({ length: from - to + 1 }, (_, i) => from - i);
 
 let currentPath = '/';
+let currentSearch = '';
 function LocationProbe() {
-  currentPath = useLocation().pathname;
+  const loc = useLocation();
+  currentPath = loc.pathname;
+  currentSearch = loc.search;
   return null;
 }
 export const getPath = () => currentPath;
+export const getSearch = () => currentSearch;
 
 export function renderApp(path = '/', { token }: { token?: string } = {}) {
   if (token) localStorage.setItem('pw_token', token);

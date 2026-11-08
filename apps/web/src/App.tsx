@@ -1,6 +1,6 @@
 import { Tabs } from 'antd';
 import { BookOutlined, HeartOutlined, PictureOutlined } from '@ant-design/icons';
-import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from './auth/AuthContext';
 import { AppHeader } from './components/AppHeader';
 import { AllPage } from './pages/AllPage';
@@ -12,6 +12,12 @@ const TABS = [
   { key: '/favorite', label: 'Favorite', icon: <HeartOutlined aria-hidden />, auth: true },
   { key: '/save', label: 'Save', icon: <BookOutlined aria-hidden />, auth: true },
 ];
+
+/** Shared links (/photo/:id, which the server decorates with Open Graph tags) open the viewer on All. */
+function SharedPhoto() {
+  const { id } = useParams();
+  return <Navigate to={/^\d+$/.test(id ?? '') ? `/?photo=${id}` : '/'} replace />;
+}
 
 export function App() {
   const location = useLocation();
@@ -53,6 +59,7 @@ export function App() {
           <Route path="/" element={<AllPage />} />
           <Route path="/favorite" element={<FavoritePage />} />
           <Route path="/save" element={<SavePage />} />
+          <Route path="/photo/:id" element={<SharedPhoto />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
