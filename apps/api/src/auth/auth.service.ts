@@ -9,6 +9,13 @@ import { APP_CONFIG, AppConfig } from '../config/env';
 import type { AuthUser } from './decorators/current-user.decorator';
 import type { LoginResponseDto } from './dto/login.dto';
 
+/** Thrown on bad credentials; `reason` is for alerts only and never reaches the client. */
+export class LoginFailedException extends UnauthorizedException {
+  constructor(readonly reason: 'unknown_user' | 'wrong_password') {
+    super('Invalid username or password');
+  }
+}
+
 // Compared against when the username doesn't exist, so both paths cost one bcrypt check.
 const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', 10);
 
@@ -31,7 +38,8 @@ export class AuthService {
   async login(username: string, password: string): Promise<LoginResponseDto> {
     const user = this.db.select().from(users).where(eq(users.username, username)).get();
     const ok = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH);
-    if (!user || !ok) throw new UnauthorizedException('Invalid username or password');
+    if (!user) throw new LoginFailedException('unknown_user');
+    if (!ok) throw new LoginFailedException('wrong_password');
     const expiresIn = ttlSeconds(this.config.jwtExpiresIn);
     const accessToken = await this.jwt.signAsync(
       { sub: user.id, username: user.username, role: user.role },

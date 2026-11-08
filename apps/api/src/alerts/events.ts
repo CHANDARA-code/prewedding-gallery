@@ -26,6 +26,11 @@ export interface LoginEvent {
   username: string;
   ip?: string;
   userAgent?: string;
+  /** Failed logins only. */
+  reason?: 'unknown_user' | 'wrong_password';
+  attempt?: number;
+  maxAttempts?: number;
+  locked?: boolean;
 }
 export interface PhotosUploadedEvent {
   actor: Actor;

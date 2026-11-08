@@ -38,7 +38,14 @@ export class AlertsListener {
 
   @OnEvent(AppEvents.LoginFailed)
   onLoginFailed(p: LoginEvent) {
-    this.alerts.notify('auth', `⚠️ Failed login for <b>${e(p.username)}</b> from ${e(p.ip ?? '?')}`);
+    const why = p.reason === 'unknown_user' ? 'no such account' : p.reason === 'wrong_password' ? 'wrong password' : '';
+    const count = p.attempt ? ` · attempt ${p.attempt}/${p.maxAttempts}` : '';
+    const ua = p.userAgent ? `\n<i>${e(p.userAgent.slice(0, 120))}</i>` : '';
+    const lock = p.locked ? `\n🔒 Locked <b>${e(p.username)}</b> from ${e(p.ip ?? '?')} for 15 min` : '';
+    this.alerts.notify(
+      'auth',
+      `${p.locked ? '🔒' : '⚠️'} Failed login for <b>${e(p.username)}</b> from ${e(p.ip ?? '?')}${why ? ` (${why})` : ''}${count}${ua}${lock}`,
+    );
   }
 
   @OnEvent(AppEvents.LoginThrottled)

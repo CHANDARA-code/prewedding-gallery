@@ -3,7 +3,8 @@ import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiResponse, ApiTags } from
 import { Throttle } from '@nestjs/throttler';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { Request, Response } from 'express';
-import { AuthService } from './auth.service';
+import { AuthService, LoginFailedException } from './auth.service';
+import { LoginGuardService, MAX_FAILURES } from './login-guard.service';
 import { LoginDto, LoginResponseDto, UserDto } from './dto/login.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { AuthUser, CurrentUser } from './decorators/current-user.decorator';
@@ -16,6 +17,7 @@ export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly events: EventEmitter2,
+    private readonly guard: LoginGuardService,
   ) {}
 
   @Post('login')
@@ -23,7 +25,7 @@ export class AuthController {
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @ApiOperation({
     summary: 'Log in',
-    description: 'Exchange a username and password for a JWT. Rate limited to 5 attempts per minute per IP. The error never reveals whether the username exists.',
+    description: 'Exchange a username and password for a JWT. Rate limited to 5 attempts per minute per IP; 5 failures for one username from one IP within 15 minutes lock that pair for 15 minutes (429). The error never reveals whether the username exists.',
   })
   @ApiOkResponse({ type: LoginResponseDto })
   @ApiResponse({ status: 401, type: ErrorDto, description: 'Invalid username or password' })
@@ -31,12 +33,17 @@ export class AuthController {
   async login(@Body() dto: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     res.setHeader('Cache-Control', 'no-store');
     const meta = { username: dto.username, ip: req.ip, userAgent: req.get('user-agent') };
+    this.guard.assertNotLocked(dto.username, req.ip);
     try {
       const result = await this.auth.login(dto.username, dto.password);
+      this.guard.recordSuccess(dto.username, req.ip);
       this.events.emit(AppEvents.LoginSucceeded, meta);
       return result;
     } catch (err) {
-      this.events.emit(AppEvents.LoginFailed, meta);
+      if (err instanceof LoginFailedException) {
+        const { count, locked } = this.guard.recordFailure(dto.username, req.ip);
+        this.events.emit(AppEvents.LoginFailed, { ...meta, reason: err.reason, attempt: count, maxAttempts: MAX_FAILURES, locked });
+      }
       throw err;
     }
   }
