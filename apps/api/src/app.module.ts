@@ -13,6 +13,7 @@ import { AuthModule } from './auth/auth.module';
 import { PhotosModule } from './photos/photos.module';
 import { FavoritesModule } from './favorites/favorites.module';
 import { SavesModule } from './saves/saves.module';
+import { UsersModule } from './users/users.module';
 import { HealthController } from './health.controller';
 
 @Module({})
@@ -37,6 +38,7 @@ export class AppModule {
         PhotosModule,
         FavoritesModule,
         SavesModule,
+        UsersModule,
       ],
       controllers: [HealthController],
       providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
