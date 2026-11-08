@@ -17,9 +17,14 @@ export const photos = sqliteTable(
     caption: text('caption'),
     filename: text('filename').notNull(), // stored original, e.g. 8f2c...jpg
     thumbFilename: text('thumb_filename').notNull(),
+    // 2048px WebP shown in the viewer (orientation + rotation applied). NULL until backfilled.
+    previewFilename: text('preview_filename'),
+    originalName: text('original_name'), // the uploader's file name, e.g. KSNT0990.jpg
+    rotation: integer('rotation').notNull().default(0), // admin rotation on top of EXIF: 0/90/180/270
+    exif: text('exif'), // JSON: camera/lens/exposure fields only (no GPS, no serial numbers)
     mimeType: text('mime_type').notNull(),
     sizeBytes: integer('size_bytes').notNull(),
-    width: integer('width').notNull(),
+    width: integer('width').notNull(), // displayed size, after orientation and rotation
     height: integer('height').notNull(),
     uploadedBy: integer('uploaded_by').notNull().references(() => users.id),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),

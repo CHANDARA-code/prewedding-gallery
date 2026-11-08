@@ -15,6 +15,8 @@ const listCols = {
   caption: photos.caption,
   filename: photos.filename,
   thumbFilename: photos.thumbFilename,
+  previewFilename: photos.previewFilename,
+  rotation: photos.rotation,
   width: photos.width,
   height: photos.height,
   createdAt: photos.createdAt,
@@ -55,7 +57,7 @@ export class PhotosRepository {
     const statusCond =
       status === 'active' ? isNull(photos.deletedAt) : status === 'deleted' ? isNotNull(photos.deletedAt) : undefined;
     return this.db
-      .select({ ...listCols, deletedAt: photos.deletedAt, isFavorite: isFavoriteCol, isSaved: isSavedCol })
+      .select({ ...listCols, deletedAt: photos.deletedAt, originalName: photos.originalName, isFavorite: isFavoriteCol, isSaved: isSavedCol })
       .from(photos)
       .leftJoin(favorites, and(eq(favorites.userId, p('uid')), eq(favorites.photoId, photos.id)))
       .leftJoin(saves, and(eq(saves.userId, p('uid')), eq(saves.photoId, photos.id)))
@@ -101,6 +103,8 @@ export class PhotosRepository {
       mimeType: photos.mimeType,
       sizeBytes: photos.sizeBytes,
       uploadedBy: photos.uploadedBy,
+      originalName: photos.originalName,
+      exif: photos.exif,
       isFavorite: isFavoriteCol,
       isSaved: isSavedCol,
     })

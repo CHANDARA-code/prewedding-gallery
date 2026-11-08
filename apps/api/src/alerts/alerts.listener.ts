@@ -8,6 +8,7 @@ import {
   ErrorEvent,
   LoginEvent,
   PhotoEvent,
+  PhotosExportedEvent,
   PhotosUploadedEvent,
 } from './events';
 
@@ -64,6 +65,16 @@ export class AlertsListener {
   @OnEvent(AppEvents.PhotoUpdated)
   onUpdated(p: PhotoEvent) {
     this.alerts.notify('admin', `✏️ ${who(p.actor)} edited photo #${p.photoId}`);
+  }
+
+  @OnEvent(AppEvents.PhotoRotated)
+  onRotated(p: PhotoEvent) {
+    this.alerts.notify('admin', `🔄 ${who(p.actor)} rotated photo #${p.photoId} to ${p.rotation}°`);
+  }
+
+  @OnEvent(AppEvents.PhotosExported)
+  onExported(p: PhotosExportedEvent) {
+    this.alerts.notify('admin', `📄 ${who(p.actor)} exported a CSV of ${p.rows} photo(s) (${e(p.status)})`);
   }
 
   @OnEvent(AppEvents.PhotoSoftDeleted)

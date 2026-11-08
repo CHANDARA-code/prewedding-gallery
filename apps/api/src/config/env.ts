@@ -14,6 +14,8 @@ export interface AppConfig {
   allowDemoSeed: boolean;
   trustProxy: string | number | boolean | undefined;
   webDistDir?: string;
+  /** Absolute site URL for share links and og:image, e.g. https://prewedding.leavchandara.com */
+  publicUrl?: string;
   telegramBotToken?: string;
   telegramChatId?: string;
   alertEvents: Set<string>;
@@ -64,6 +66,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     allowDemoSeed: env.ALLOW_DEMO_SEED === 'true',
     trustProxy,
     webDistDir: env.WEB_DIST_DIR || undefined,
+    publicUrl: env.PUBLIC_URL?.replace(/\/+$/, '') || undefined,
     telegramBotToken: env.TELEGRAM_BOT_TOKEN || undefined,
     telegramChatId: env.TELEGRAM_CHAT_ID || undefined,
     alertEvents,

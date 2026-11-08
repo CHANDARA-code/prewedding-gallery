@@ -12,6 +12,8 @@ import { AdminStatus, PhotosRepository } from './photos.repository';
 import { StorageService } from './storage.service';
 import { PhotoCacheService } from './photo-cache.service';
 import type { UpdatePhotoDto } from './dto/photo-input.dto';
+import { join } from 'path';
+import { existsSync } from 'fs';
 
 const toSeconds = (v: Date | number) => (v instanceof Date ? Math.floor(v.getTime() / 1000) : v);
 
@@ -72,7 +74,7 @@ export class PhotosService {
     const row = this.repo.findById(id, user?.id ?? null);
     const isAdmin = user?.role === 'admin';
     if (!row || (row.deletedAt && !isAdmin)) throw new NotFoundException('Photo not found');
-    return toPhotoDto(row, { withFlags: !!user, admin: isAdmin });
+    return toPhotoDto(row, { withFlags: !!user, admin: isAdmin, detail: true });
   }
 
   /** Throws 404 unless the photo exists and is active. */
@@ -102,7 +104,7 @@ export class PhotosService {
         ),
       );
     } catch (err) {
-      await Promise.all(stored.map((s) => this.storage.unlinkAll(s.filename, s.thumbFilename).catch(() => undefined)));
+      await Promise.all(stored.map((s) => this.storage.unlinkAll(s).catch(() => undefined)));
       throw err;
     }
     this.cache.bump();
@@ -128,11 +130,11 @@ export class PhotosService {
   async softDelete(user: AuthUser, id: number): Promise<PhotoDto> {
     const row = this.findRaw(id);
     if (!row.deletedAt) {
-      await this.storage.moveFiles(row.filename, row.thumbFilename, 'trash');
+      await this.storage.moveFiles(row, 'trash');
       try {
         this.db.update(photos).set({ deletedAt: new Date() }).where(eq(photos.id, id)).run();
       } catch (err) {
-        await this.storage.moveFiles(row.filename, row.thumbFilename, 'live');
+        await this.storage.moveFiles(row, 'live');
         throw err;
       }
       this.cache.bump();
@@ -144,11 +146,11 @@ export class PhotosService {
   async restore(user: AuthUser, id: number): Promise<PhotoDto> {
     const row = this.findRaw(id);
     if (row.deletedAt) {
-      await this.storage.moveFiles(row.filename, row.thumbFilename, 'live');
+      await this.storage.moveFiles(row, 'live');
       try {
         this.db.update(photos).set({ deletedAt: null }).where(eq(photos.id, id)).run();
       } catch (err) {
-        await this.storage.moveFiles(row.filename, row.thumbFilename, 'trash');
+        await this.storage.moveFiles(row, 'trash');
         throw err;
       }
       this.cache.bump();
@@ -162,12 +164,50 @@ export class PhotosService {
     this.db.delete(photos).where(eq(photos.id, id)).run(); // favorites/saves cascade
     this.cache.bump();
     try {
-      await this.storage.unlinkAll(row.filename, row.thumbFilename);
+      await this.storage.unlinkAll(row);
     } catch (err) {
       // Orphaned files are tolerable, dangling rows are not (spec 6.4).
       this.logger.error(`Hard delete of photo ${id}: file unlink failed: ${(err as Error).message}`);
     }
     this.events.emit(AppEvents.PhotoHardDeleted, { actor: user, photoId: id, title: row.title });
+  }
+
+  /**
+   * Rotates the displayed image by `degrees` (clockwise, relative to the current rotation). The original
+   * file is never modified: a new thumbnail and preview are rendered from it under new names (so every
+   * cache picks them up), the row is updated, then the old renderings are removed.
+   */
+  async rotate(user: AuthUser, id: number, degrees: number): Promise<PhotoDto> {
+    const row = this.findRaw(id);
+    const rotation = (((row.rotation + degrees) % 360) + 360) % 360;
+    if (rotation === row.rotation) return this.getOne(id, user);
+    const next = await this.storage.rerender(row.filename, rotation, Boolean(row.deletedAt));
+    try {
+      this.db
+        .update(photos)
+        .set({ rotation, thumbFilename: next.thumbFilename, previewFilename: next.previewFilename, width: next.width, height: next.height })
+        .where(eq(photos.id, id))
+        .run();
+    } catch (err) {
+      await this.storage.unlinkDerivatives(next.thumbFilename, next.previewFilename);
+      throw err;
+    }
+    await this.storage.unlinkDerivatives(row.thumbFilename, row.previewFilename);
+    this.cache.bump();
+    this.events.emit(AppEvents.PhotoRotated, { actor: user, photoId: id, title: row.title, rotation });
+    return this.getOne(id, user);
+  }
+
+  /** Path of the 1200x630 share card (og:image) of an active photo. */
+  async shareCard(id: number, label: string): Promise<string> {
+    const row = this.findRaw(id);
+    if (row.deletedAt) throw new NotFoundException('Photo not found');
+    const preview = row.previewFilename ? join(this.storage.previews, row.previewFilename) : null;
+    const src = preview && existsSync(preview) ? preview : this.storage.originalPath(row.filename);
+    if (!existsSync(src)) throw new NotFoundException('Photo file not found');
+    // Without a preview the original is used with only EXIF orientation, so rotation must be part of the key.
+    const key = row.previewFilename ?? `${row.thumbFilename}-r${row.rotation}`;
+    return this.storage.shareCard(key, src, label);
   }
 
   /** Startup stat only — never on a request path. */

@@ -67,6 +67,9 @@ importers:
       drizzle-orm:
         specifier: ^0.44.6
         version: 0.44.6(@types/better-sqlite3@7.6.13)(better-sqlite3@12.11.1)
+      exif-reader:
+        specifier: 2.0.2
+        version: 2.0.2
       express:
         specifier: ^5.1.0
         version: 5.3.0(supports-color@8.1.1)
@@ -3316,6 +3319,9 @@ packages:
   execa@5.1.1:
     resolution: {integrity: sha512-8uSpZZocAZRBAPIEINJj3Lo9HyGitllczc27Eh5YYojjMFMn8yHMDMaUHE2Jqfq05D/wucwI4JGURyXt1vchyg==}
     engines: {node: '>=10'}
+
+  exif-reader@2.0.2:
+    resolution: {integrity: sha512-CVFqcwdwFe2GnbbW7/Q7sUhVP5Ilaw7fuXQc6ad3AbX20uGfHhXTpkF/hQHPrtOuys9elFVgsUkvwfhfvjDa1A==}
 
   exit-x@0.2.2:
     resolution: {integrity: sha512-+I6B/IkJc1o/2tiURyz/ivu/O0nKNEArIUB5O7zBrlDVJr22SCLH3xTeEry428LvFhRzIA1g8izguxJ/gbNcVQ==}
@@ -8418,6 +8424,8 @@ snapshots:
       onetime: 5.1.2
       signal-exit: 3.0.7
       strip-final-newline: 2.0.0
+
+  exif-reader@2.0.2: {}
 
   exit-x@0.2.2: {}
 

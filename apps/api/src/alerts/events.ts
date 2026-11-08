@@ -7,6 +7,8 @@ export const AppEvents = {
   LoginThrottled: 'auth.login.throttled',
   PhotosUploaded: 'photo.uploaded',
   PhotoUpdated: 'photo.updated',
+  PhotoRotated: 'photo.rotated',
+  PhotosExported: 'photo.exported',
   PhotoSoftDeleted: 'photo.soft_deleted',
   PhotoRestored: 'photo.restored',
   PhotoHardDeleted: 'photo.hard_deleted',
@@ -41,6 +43,12 @@ export interface PhotoEvent {
   actor: Actor;
   photoId: number;
   title?: string | null;
+  rotation?: number;
+}
+export interface PhotosExportedEvent {
+  actor: Actor;
+  rows: number;
+  status: string;
 }
 export interface ErrorEvent {
   method?: string;

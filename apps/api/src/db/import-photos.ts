@@ -2,7 +2,8 @@
  * `pnpm --filter api db:import [dir ...]` imports real photos from folders (default: the
  * extracted A.zip and B.zip in ../../photos/A and ../../photos/B).
  *
- * - Every file is validated by magic bytes, gets a 600px WebP thumbnail and a random UUID name,
+ * - Every file is validated by magic bytes, gets a 600px WebP thumbnail, a 2048px WebP preview and a
+ *   random UUID name (the source file name is kept in original_name),
  *   and the original is hard-linked into UPLOAD_DIR (copied if linking fails).
  * - Ids grow with upload time and the gallery shows the newest first, so files are inserted in
  *   reverse order: the first photo of folder A ends up at the top of the gallery.
@@ -81,7 +82,7 @@ async function main() {
         while (next < batch.length) {
           const idx = next++;
           try {
-            results[idx] = await storage.store(batch[idx], 'link');
+            results[idx] = await storage.store(batch[idx], 'link', basename(batch[idx]));
           } catch (err) {
             failures.push(`${keyOf(batch[idx])}: ${(err as Error).message}`);
           }

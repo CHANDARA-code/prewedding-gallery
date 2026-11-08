@@ -10,6 +10,7 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   Res,
   UploadedFiles,
   UseGuards,
@@ -27,7 +28,14 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { Inject } from '@nestjs/common';
+import { DRIZZLE } from '../db/db.module';
+import type { Db } from '../db/client';
+import { APP_CONFIG, AppConfig } from '../config/env';
+import { AppEvents } from '../alerts/events';
+import { buildPhotosCsv } from './photo-export';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -36,7 +44,7 @@ import { AdminListQueryDto } from '../common/list-query.dto';
 import { ErrorDto, PhotoDto, PhotoListDto } from '../common/photo.dto';
 import { setNoStore } from '../common/cache-headers';
 import { PhotosService } from './photos.service';
-import { UpdatePhotoDto, UploadPhotosBodyDoc, UploadPhotosDto } from './dto/photo-input.dto';
+import { ExportQueryDto, RotatePhotoDto, UpdatePhotoDto, UploadPhotosBodyDoc, UploadPhotosDto } from './dto/photo-input.dto';
 
 @ApiTags('Admin')
 @ApiBearerAuth()
@@ -46,7 +54,30 @@ import { UpdatePhotoDto, UploadPhotosBodyDoc, UploadPhotosDto } from './dto/phot
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('admin')
 export class AdminPhotosController {
-  constructor(private readonly photos: PhotosService) {}
+  constructor(
+    private readonly photos: PhotosService,
+    private readonly events: EventEmitter2,
+    @Inject(DRIZZLE) private readonly db: Db,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
+  ) {}
+
+  @Get('export.csv')
+  @ApiOperation({
+    summary: 'Export photos as CSV',
+    description:
+      'One row per photo with the original file name, stored file name, title, caption, size, dimensions, orientation, camera EXIF, uploader, dates and favorite/save counts. UTF-8 with BOM (opens correctly in Excel).',
+  })
+  @ApiOkResponse({ description: 'text/csv attachment', content: { 'text/csv': { schema: { type: 'string' } } } })
+  exportCsv(@Query() q: ExportQueryDto, @CurrentUser() user: AuthUser, @Req() req: Request, @Res() res: Response) {
+    const publicUrl = this.config.publicUrl ?? `${req.protocol}://${req.get('host')}`;
+    const { csv, rows } = buildPhotosCsv(this.db, q.status, publicUrl);
+    const date = new Date().toISOString().slice(0, 10);
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="prewedding-photos-${q.status}-${date}.csv"`);
+    res.send(csv);
+    this.events.emit(AppEvents.PhotosExported, { actor: user, rows, status: q.status });
+  }
 
   @Get()
   @ApiOperation({ summary: 'List photos (admin)', description: 'All photos including soft-deleted ones, newest first, cursor-paginated. Filter with `status`.' })
@@ -86,6 +117,20 @@ export class AdminPhotosController {
   update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdatePhotoDto, @CurrentUser() user: AuthUser, @Res({ passthrough: true }) res: Response) {
     setNoStore(res);
     return this.photos.update(user, id, dto);
+  }
+
+  @Post(':id/rotate')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Rotate',
+    description:
+      'Rotates how the photo is displayed everywhere (grid, viewer, share card) by `degrees` clockwise, relative to its current rotation. The original file is never changed.',
+  })
+  @ApiOkResponse({ type: PhotoDto })
+  @ApiResponse({ status: 404, type: ErrorDto })
+  rotate(@Param('id', ParseIntPipe) id: number, @Body() dto: RotatePhotoDto, @CurrentUser() user: AuthUser, @Res({ passthrough: true }) res: Response) {
+    setNoStore(res);
+    return this.photos.rotate(user, id, dto.degrees);
   }
 
   @Delete(':id')

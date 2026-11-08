@@ -1,5 +1,6 @@
-import { Controller, Get, Param, ParseIntPipe, Query, Req, Res, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Controller, Get, Inject, Param, ParseIntPipe, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiProduces, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { APP_CONFIG, AppConfig } from '../config/env';
 import type { Request, Response } from 'express';
 import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { AuthUser, CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -13,7 +14,25 @@ import { PhotosService } from './photos.service';
 @Controller('photos')
 @UseGuards(OptionalJwtAuthGuard)
 export class PhotosController {
-  constructor(private readonly photos: PhotosService) {}
+  constructor(
+    private readonly photos: PhotosService,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
+  ) {}
+
+  @Get(':id/og.jpg')
+  @ApiOperation({
+    summary: 'Share card image',
+    description: '1200x630 JPEG used as `og:image` when a `/photo/{id}` link is shared. Rendered on first request, then cached.',
+  })
+  @ApiProduces('image/jpeg')
+  @ApiResponse({ status: 200, description: 'JPEG image' })
+  @ApiResponse({ status: 404, type: ErrorDto })
+  async shareCard(@Param('id', ParseIntPipe) id: number, @Res() res: Response) {
+    const label = this.config.publicUrl ? new URL(this.config.publicUrl).host : 'Pre-Wedding View';
+    const path = await this.photos.shareCard(id, label);
+    res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+    res.sendFile(path, { dotfiles: 'allow' }); // the cache dir is .og (never served statically)
+  }
 
   @Get()
   @ApiOperation({
@@ -31,7 +50,8 @@ export class PhotosController {
   @Get(':id')
   @ApiOperation({
     summary: 'Get a photo',
-    description: 'Photo detail. Soft-deleted photos return 404 except for admins, who also get `mimeType`, `sizeBytes` and `uploadedBy`.',
+    description:
+      'Photo detail with `mimeType`, `sizeBytes` and camera `exif`. Soft-deleted photos return 404 except for admins, who also get `uploadedBy` and `originalName`.',
   })
   @ApiOkResponse({ type: PhotoDto })
   @ApiResponse({ status: 404, type: ErrorDto })
