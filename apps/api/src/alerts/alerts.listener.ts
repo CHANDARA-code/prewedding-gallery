@@ -10,6 +10,7 @@ import {
   PhotoEvent,
   PhotosExportedEvent,
   PhotosUploadedEvent,
+  UserChangedEvent,
 } from './events';
 
 const who = (a: Actor) => `<b>${e(a.username)}</b>${a.role === 'admin' ? ' (admin)' : ''}`;
@@ -39,7 +40,7 @@ export class AlertsListener {
 
   @OnEvent(AppEvents.LoginFailed)
   onLoginFailed(p: LoginEvent) {
-    const why = p.reason === 'unknown_user' ? 'no such account' : p.reason === 'wrong_password' ? 'wrong password' : '';
+    const why = p.reason === 'unknown_user' ? 'no such account' : p.reason === 'wrong_password' ? 'wrong password' : p.reason === 'disabled' ? 'account disabled' : '';
     const count = p.attempt ? ` · attempt ${p.attempt}/${p.maxAttempts}` : '';
     const ua = p.userAgent ? `\n<i>${e(p.userAgent.slice(0, 120))}</i>` : '';
     const lock = p.locked ? `\n🔒 Locked <b>${e(p.username)}</b> from ${e(p.ip ?? '?')} for 15 min` : '';
@@ -70,6 +71,11 @@ export class AlertsListener {
   @OnEvent(AppEvents.PhotoRotated)
   onRotated(p: PhotoEvent) {
     this.alerts.notify('admin', `🔄 ${who(p.actor)} rotated photo #${p.photoId} to ${p.rotation}°`);
+  }
+
+  @OnEvent(AppEvents.UserChanged)
+  onUserChanged(p: UserChangedEvent) {
+    this.alerts.notify('admin', `👤 ${who(p.actor)} · user <b>${e(p.target)}</b>: ${e(p.change)}`);
   }
 
   @OnEvent(AppEvents.PhotosExported)

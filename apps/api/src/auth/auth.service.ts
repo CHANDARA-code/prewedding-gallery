@@ -8,10 +8,11 @@ import { users } from '../db/schema';
 import { APP_CONFIG, AppConfig } from '../config/env';
 import type { AuthUser } from './decorators/current-user.decorator';
 import type { LoginResponseDto } from './dto/login.dto';
+import { effectivePermissions, parsePermissions } from './permissions';
 
 /** Thrown on bad credentials; `reason` is for alerts only and never reaches the client. */
 export class LoginFailedException extends UnauthorizedException {
-  constructor(readonly reason: 'unknown_user' | 'wrong_password') {
+  constructor(readonly reason: 'unknown_user' | 'wrong_password' | 'disabled') {
     super('Invalid username or password');
   }
 }
@@ -36,30 +37,29 @@ export class AuthService {
   ) {}
 
   async login(username: string, password: string): Promise<LoginResponseDto> {
-    const user = this.db.select().from(users).where(eq(users.username, username)).get();
+    // Usernames are stored lowercase; phones often capitalise the first letter.
+    const user = this.db.select().from(users).where(eq(users.username, username.trim().toLowerCase())).get();
     const ok = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH);
     if (!user) throw new LoginFailedException('unknown_user');
     if (!ok) throw new LoginFailedException('wrong_password');
+    // Checked after the password so a disabled account looks like any other failure to guessers.
+    if (user.disabled) throw new LoginFailedException('disabled');
+    this.db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id)).run();
     const expiresIn = ttlSeconds(this.config.jwtExpiresIn);
     const accessToken = await this.jwt.signAsync(
-      { sub: user.id, username: user.username, role: user.role },
+      { sub: user.id, username: user.username, role: user.role, ver: user.tokenVersion },
       { expiresIn },
     );
     return {
       accessToken,
       tokenType: 'Bearer',
       expiresIn,
-      user: { id: user.id, username: user.username, role: user.role },
+      user: { id: user.id, username: user.username, role: user.role, permissions: effectivePermissions(user.role, parsePermissions(user.permissions)) },
     };
   }
 
+  /** The JWT strategy already loaded the user fresh from the database. */
   me(authUser: AuthUser) {
-    const user = this.db
-      .select({ id: users.id, username: users.username, role: users.role })
-      .from(users)
-      .where(eq(users.id, authUser.id))
-      .get();
-    if (!user) throw new UnauthorizedException('User no longer exists');
-    return user;
+    return { id: authUser.id, username: authUser.username, role: authUser.role, permissions: authUser.permissions };
   }
 }

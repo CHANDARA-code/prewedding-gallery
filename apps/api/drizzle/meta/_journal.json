@@ -15,6 +15,13 @@
       "when": 1794104146710,
       "tag": "0001_photo_media",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1794117619967,
+      "tag": "0002_user_permissions",
+      "breakpoints": true
     }
   ]
 }

@@ -6,6 +6,12 @@ export const users = sqliteTable('users', {
   username: text('username').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
   role: text('role', { enum: ['user', 'admin'] }).notNull().default('user'),
+  // JSON array of extra actions granted to a `user` (admins always have every permission).
+  permissions: text('permissions').notNull().default('[]'),
+  disabled: integer('disabled', { mode: 'boolean' }).notNull().default(false),
+  // Bumped on password reset / disable; tokens carrying an older version stop working.
+  tokenVersion: integer('token_version').notNull().default(0),
+  lastLoginAt: integer('last_login_at', { mode: 'timestamp' }),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 });
 

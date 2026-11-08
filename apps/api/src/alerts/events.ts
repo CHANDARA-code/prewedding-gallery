@@ -12,6 +12,7 @@ export const AppEvents = {
   PhotoSoftDeleted: 'photo.soft_deleted',
   PhotoRestored: 'photo.restored',
   PhotoHardDeleted: 'photo.hard_deleted',
+  UserChanged: 'user.changed',
   FavoriteAdded: 'favorite.added',
   FavoriteRemoved: 'favorite.removed',
   SaveAdded: 'save.added',
@@ -29,7 +30,7 @@ export interface LoginEvent {
   ip?: string;
   userAgent?: string;
   /** Failed logins only. */
-  reason?: 'unknown_user' | 'wrong_password';
+  reason?: 'unknown_user' | 'wrong_password' | 'disabled';
   attempt?: number;
   maxAttempts?: number;
   locked?: boolean;
@@ -49,6 +50,11 @@ export interface PhotosExportedEvent {
   actor: Actor;
   rows: number;
   status: string;
+}
+export interface UserChangedEvent {
+  actor: Actor;
+  target: string;
+  change: string;
 }
 export interface ErrorEvent {
   method?: string;

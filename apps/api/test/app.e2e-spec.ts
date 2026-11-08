@@ -20,7 +20,7 @@ describe('auth', () => {
     const res = await ctx.http.post(`${api}/auth/login`).send({ username: 'demo', password: 'password' }).expect(200);
     expect(res.body).toMatchObject({ tokenType: 'Bearer', expiresIn: 3600, user: { username: 'demo', role: 'user' } });
     const me = await ctx.http.get(`${api}/auth/me`).set(bearer(res.body.accessToken)).expect(200);
-    expect(me.body).toEqual({ id: expect.any(Number), username: 'demo', role: 'user' });
+    expect(me.body).toEqual({ id: expect.any(Number), username: 'demo', role: 'user', permissions: [] });
   });
 
   it('fails with the same generic 401 for a bad password or unknown user', async () => {

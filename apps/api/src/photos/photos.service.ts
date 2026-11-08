@@ -7,6 +7,7 @@ import { photos } from '../db/schema';
 import { decodeIdCursor, decodeTimeIdCursor, encodeCursor } from '../common/cursor';
 import { PhotoDto, PhotoListDto, PhotoListRow, toPhotoDto } from '../common/photo.dto';
 import type { AuthUser } from '../auth/decorators/current-user.decorator';
+import { hasPermission } from '../auth/permissions';
 import { AppEvents } from '../alerts/events';
 import { AdminStatus, PhotosRepository } from './photos.repository';
 import { StorageService } from './storage.service';
@@ -72,9 +73,10 @@ export class PhotosService {
 
   getOne(id: number, user: AuthUser | null): PhotoDto {
     const row = this.repo.findById(id, user?.id ?? null);
-    const isAdmin = user?.role === 'admin';
-    if (!row || (row.deletedAt && !isAdmin)) throw new NotFoundException('Photo not found');
-    return toPhotoDto(row, { withFlags: !!user, admin: isAdmin, detail: true });
+    // Whoever manages the trash can open trashed photos; any photo manager sees the admin fields.
+    const seesTrash = hasPermission(user, 'photos.delete');
+    if (!row || (row.deletedAt && !seesTrash)) throw new NotFoundException('Photo not found');
+    return toPhotoDto(row, { withFlags: !!user, admin: seesTrash || hasPermission(user, 'photos.export') || hasPermission(user, 'photos.edit'), detail: true });
   }
 
   /** Throws 404 unless the photo exists and is active. */
