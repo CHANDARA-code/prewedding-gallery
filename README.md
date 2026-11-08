@@ -27,7 +27,20 @@ pnpm --filter api db:import                    # default: photos/A then photos/B
 pnpm --filter api db:import /path/to/folder    # any other folder
 ```
 
-Each file is checked by magic bytes and gets a 600 px WebP thumbnail and a random UUID name. Originals are hard-linked into `UPLOAD_DIR`, so they take no extra disk space; `photos/` must stay on the same filesystem. Photos are inserted in reverse, so the first photo of A shows at the top of the gallery. The import is resumable through `import-manifest.json` next to the database, and it posts a start and a summary alert to Telegram.
+Each file is checked by magic bytes and gets a 600 px WebP thumbnail, a 2048 px WebP preview (what the viewer shows; ~5x lighter than a 20 MP original) and a random UUID name. The source file name is kept as `original_name` and camera EXIF is stored (never GPS or serial numbers). Originals are hard-linked into `UPLOAD_DIR`, so they take no extra disk space; `photos/` must stay on the same filesystem. Photos are inserted in reverse, so the first photo of A shows at the top of the gallery. The import is resumable through `import-manifest.json` next to the database, and it posts a start and a summary alert to Telegram.
+
+Photos stored before previews existed are filled in with `db:backfill` (resumable; also restores original names from the import manifest):
+
+```bash
+cd apps/api && node -r dotenv/config dist/db/backfill-media.js dotenv_config_path=.env.production
+```
+
+## Gallery features
+
+- **Photo viewer**: opens at `?photo=<id>` (Back closes it). Zoom with wheel / pinch / double-tap (full resolution loads past 160%), swipe or ←/→ to move, filmstrip, slideshow (Space), full screen (F), details panel with EXIF (I), download original (D), share (S).
+- **Sharing**: `/photo/<id>` is served with Open Graph and Twitter tags and a 1200x630 share card (`/api/v1/photos/<id>/og.jpg`, rendered once and cached in `uploads/.og`), so Facebook, Messenger, Telegram, WhatsApp and X show a preview. Instagram gets the image through the native share sheet. Set `PUBLIC_URL` so links are absolute.
+- **Admin**: rotate any photo from its card menu (every tab) or the viewer. A new thumbnail and preview are rendered and the original is never changed. **Export CSV** on the All tab downloads every photo in the current filter with original/stored file names, size, dimensions, orientation, EXIF, uploader, dates and favorite/save counts (`GET /api/v1/admin/photos/export.csv`).
+- **Caching**: `/uploads` files are immutable (1 year), and a service worker (`apps/web/public/sw.js`) keeps thumbnails and previews on the device, capped at 3000 and 400 entries.
 
 ## Telegram alerts
 
@@ -38,12 +51,12 @@ Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in the API env. `pnpm --filter a
   | Group | Events |
   |---|---|
   | `system` | API started / stopping |
-  | `auth` | successful login, failed login, login rate limit hit |
-  | `admin` | upload, edit, soft delete, restore, hard delete |
+  | `auth` | successful login; failed login (unknown account vs wrong password, attempt n/5, user agent); lockout; rate limit hit |
+  | `admin` | upload, edit, rotate, CSV export, soft delete, restore, hard delete |
   | `engagement` | favorite / unfavorite, save / unsave |
   | `error` | any 5xx response or unhandled rejection, with a short stack trace |
 
-- **Uptime watchdog** (`src/alerts/watchdog.ts`): a separate pm2 process, so it still reports when the API is down. It checks the local and public `/api/v1/health` every 60 s. After 2 failed checks it sends DOWN, and on recovery it sends UP with the downtime. It also warns when the uploads disk has less than 5 GB free.
+- **Uptime watchdog** (`src/alerts/watchdog.ts`): a separate pm2 process, so it still reports when the API is down. It checks the local and public `/api/v1/health` every 60 s, retrying each check 3 times. After 2 failed checks it sends DOWN (noting when the origin is healthy and only the server → Cloudflare path fails), and on recovery it sends UP with the downtime. It also warns when the uploads disk has less than 5 GB free.
 
 ## Production (this server)
 
@@ -51,7 +64,7 @@ Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in the API env. `pnpm --filter a
 |---|---|
 | Processes | pm2 `prewedding-api` (127.0.0.1:4420) and `prewedding-watchdog`, defined in `ecosystem.config.cjs` |
 | Config | `apps/api/.env.production` (gitignored, mode 600) |
-| Data | `/opt/prewedding-data/` (`app.db`, `uploads/`, `admin-credentials.txt`) |
+| Data | `/opt/prewedding-data/` (`app.db`, `uploads/`, `backups/`, `admin-credentials.txt`) |
 | Proxy | 1Panel OpenResty `conf.d/prewedding.leavchandara.com.conf`, behind Cloudflare |
 | TLS | acme.sh (ZeroSSL), auto-renews and reloads OpenResty |
 
@@ -59,8 +72,11 @@ Deploy an update:
 
 ```bash
 pnpm install && pnpm --filter web build && pnpm --filter api build
-pm2 startOrReload ecosystem.config.cjs
+sqlite3 /opt/prewedding-data/app.db ".backup '/opt/prewedding-data/backups/app-$(date +%Y%m%d-%H%M%S).db'"
+pm2 startOrReload ecosystem.config.cjs --update-env    # migrations run on startup
 ```
+
+Login protection: 5 attempts/min per IP, and 5 failures for one username from one IP within 15 min lock that pair for 15 min.
 
 Accounts: there is no self-registration and the demo seed is blocked in production. Create or reset users with:
 

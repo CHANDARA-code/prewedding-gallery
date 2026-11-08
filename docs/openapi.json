@@ -29,7 +29,7 @@
     },
     "/api/v1/auth/login": {
       "post": {
-        "description": "Exchange a username and password for a JWT. Rate limited to 5 attempts per minute per IP. The error never reveals whether the username exists.",
+        "description": "Exchange a username and password for a JWT. Rate limited to 5 attempts per minute per IP; 5 failures for one username from one IP within 15 minutes lock that pair for 15 minutes (429). The error never reveals whether the username exists.",
         "operationId": "AuthController_login",
         "parameters": [],
         "requestBody": {
@@ -118,6 +118,46 @@
         ]
       }
     },
+    "/api/v1/photos/{id}/og.jpg": {
+      "get": {
+        "description": "1200x630 JPEG used as `og:image` when a `/photo/{id}` link is shared. Rendered on first request, then cached.",
+        "operationId": "PhotosController_shareCard",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JPEG image"
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Share card image",
+        "tags": [
+          "Photos"
+        ]
+      }
+    },
     "/api/v1/photos": {
       "get": {
         "description": "Active photos, newest first, cursor-paginated. Public; send a bearer token to also get `isFavorite` and `isSaved` flags. Guest responses are cacheable for 30 s.",
@@ -182,7 +222,7 @@
     },
     "/api/v1/photos/{id}": {
       "get": {
-        "description": "Photo detail. Soft-deleted photos return 404 except for admins, who also get `mimeType`, `sizeBytes` and `uploadedBy`.",
+        "description": "Photo detail with `mimeType`, `sizeBytes` and camera `exif`. Soft-deleted photos return 404 except for admins, who also get `uploadedBy` and `originalName`.",
         "operationId": "PhotosController_get",
         "parameters": [
           {
@@ -224,6 +264,69 @@
         "summary": "Get a photo",
         "tags": [
           "Photos"
+        ]
+      }
+    },
+    "/api/v1/admin/photos/export.csv": {
+      "get": {
+        "description": "One row per photo with the original file name, stored file name, title, caption, size, dimensions, orientation, camera EXIF, uploader, dates and favorite/save counts. UTF-8 with BOM (opens correctly in Excel).",
+        "operationId": "AdminPhotosController_exportCsv",
+        "parameters": [
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": "all",
+              "type": "string",
+              "enum": [
+                "active",
+                "deleted",
+                "all"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "text/csv attachment",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not an admin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Export photos as CSV",
+        "tags": [
+          "Admin"
         ]
       }
     },
@@ -529,6 +632,83 @@
           }
         ],
         "summary": "Soft delete",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/photos/{id}/rotate": {
+      "post": {
+        "description": "Rotates how the photo is displayed everywhere (grid, viewer, share card) by `degrees` clockwise, relative to its current rotation. The original file is never changed.",
+        "operationId": "AdminPhotosController_rotate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RotatePhotoDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhotoDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not an admin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Rotate",
         "tags": [
           "Admin"
         ]
@@ -1119,7 +1299,13 @@
           },
           "url": {
             "type": "string",
-            "example": "/uploads/8f2c1a.jpg"
+            "example": "/uploads/8f2c1a.jpg",
+            "description": "The untouched original file (download)."
+          },
+          "previewUrl": {
+            "type": "string",
+            "example": "/uploads/previews/77ab.webp",
+            "description": "2048px WebP for viewing, rotation applied. Falls back to `url` until generated."
           },
           "thumbUrl": {
             "type": "string",
@@ -1127,11 +1313,23 @@
           },
           "width": {
             "type": "number",
-            "example": 3000
+            "example": 3000,
+            "description": "Displayed width in pixels (EXIF orientation and admin rotation applied)."
           },
           "height": {
             "type": "number",
             "example": 2000
+          },
+          "rotation": {
+            "type": "number",
+            "example": 0,
+            "enum": [
+              0,
+              90,
+              180,
+              270
+            ],
+            "description": "Clockwise rotation an admin applied on top of EXIF orientation."
           },
           "createdAt": {
             "type": "string",
@@ -1156,17 +1354,38 @@
           "mimeType": {
             "type": "string",
             "example": "image/jpeg",
-            "description": "Admin detail only."
+            "description": "Detail only."
           },
           "sizeBytes": {
             "type": "number",
             "example": 2119246,
-            "description": "Admin detail only."
+            "description": "Size of the original. Detail only."
+          },
+          "exif": {
+            "type": "object",
+            "description": "Camera/lens/exposure EXIF of the original. Detail only. GPS and serial numbers are never included.",
+            "example": {
+              "make": "Canon",
+              "model": "Canon EOS R6",
+              "lens": "EF70-200mm f/2.8L IS III USM",
+              "focalLength": 135,
+              "fNumber": 2.8,
+              "exposureTime": 0.00125,
+              "iso": 500,
+              "takenAt": "2026-11-06T16:44:27+07:00"
+            },
+            "nullable": true
           },
           "uploadedBy": {
             "type": "number",
             "example": 2,
             "description": "Admin detail only."
+          },
+          "originalName": {
+            "type": "string",
+            "example": "KSNT0990.jpg",
+            "nullable": true,
+            "description": "Admin only: the uploaded file name."
           }
         },
         "required": [
@@ -1174,9 +1393,11 @@
           "title",
           "caption",
           "url",
+          "previewUrl",
           "thumbUrl",
           "width",
           "height",
+          "rotation",
           "createdAt",
           "deletedAt"
         ]
@@ -1246,6 +1467,24 @@
             "nullable": true
           }
         }
+      },
+      "RotatePhotoDto": {
+        "type": "object",
+        "properties": {
+          "degrees": {
+            "type": "number",
+            "enum": [
+              90,
+              -90,
+              180
+            ],
+            "example": 90,
+            "description": "Clockwise degrees; -90 rotates left."
+          }
+        },
+        "required": [
+          "degrees"
+        ]
       }
     }
   }
