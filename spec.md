@@ -2,8 +2,8 @@
 
 A photo gallery for pre-wedding photos. Anyone can browse. Logged-in users can favorite and save photos. An admin can upload photos and delete them (soft or hard).
 
-- **Version:** 1.1 (adds cursor pagination, infinite scroll, API and DB performance work)
-- **Date:** 2026-11-07
+- **Version:** 1.2 (adds albums; 1.1 added cursor pagination, infinite scroll, API and DB performance work)
+- **Date:** 2026-11-08
 
 ---
 
@@ -12,6 +12,7 @@ A photo gallery for pre-wedding photos. Anyone can browse. Logged-in users can f
 ### 1.1 Goals
 - Public gallery that anyone can view without logging in.
 - Per-user **Favorite** and **Save** collections for logged-in users.
+- Admin-curated **Albums** (e.g. *Barsat Angkor Wat*) that anyone can browse (11).
 - Admin-only photo management: upload, soft delete, restore, hard delete.
 - Responsive UI on mobile, tablet and desktop.
 - Documented REST API published with Mintlify.
@@ -20,7 +21,7 @@ A photo gallery for pre-wedding photos. Anyone can browse. Logged-in users can f
 
 ### 1.2 Out of Scope (v1)
 - User self-registration, password reset, social login.
-- Comments, sharing links, albums or categories.
+- Comments or categories.
 - Cloud object storage (local disk only; see 10. Future Work).
 
 ---
@@ -222,6 +223,11 @@ Base URL: `/api/v1`. JSON everywhere except upload (`multipart/form-data`). Stat
 | DELETE | `/admin/photos/:id` | Admin | **Soft delete** |
 | POST | `/admin/photos/:id/restore` | Admin | Restore a soft-deleted photo |
 | DELETE | `/admin/photos/:id/permanent` | Admin | **Hard delete** (row and files) |
+| GET | `/albums` | Public (optional JWT) | Albums with count and cover (11) |
+| GET | `/albums/:slug` | Public (optional JWT) | Album detail |
+| GET | `/albums/:slug/photos` | Public (optional JWT) | Album photos, cursor-paginated |
+| POST / PATCH / DELETE | `/admin/albums[/:id]` | `albums.manage` | Create, edit, delete albums |
+| POST | `/admin/albums/:id/photos[/remove]` | `albums.manage` | Add / remove photos (`{ photoIds }`) |
 
 ### 6.3 Key Contracts
 
@@ -392,12 +398,13 @@ Measured on a developer laptop against a DB seeded with 10,000 photos (`db:seed:
 
 ### 7.1 Routes and Top Tab Bar
 
-An Ant Design `Tabs` component (`items` API, `centered`, sticky at the top under the header) with three tabs. The active tab is synced to the URL.
+An Ant Design `Tabs` component (`items` API, `centered`, sticky at the top under the header) with four tabs. The active tab is synced to the URL.
 
 | Tab | Route | Visible to | Behavior |
 |---|---|---|---|
 | **All** | `/` | Everyone | Public gallery of all active photos |
 | **Favorite** | `/favorite` | Logged-in users | The user's favorited photos |
+| **Albums** | `/albums`, `/albums/:slug` | Everyone | Admin-curated albums (11) |
 | **Save** | `/save` | Logged-in users | The user's saved photos |
 
 - The Favorite and Save tabs are always shown. A guest who clicks either sees a login prompt (the Login modal opens, and on success the app navigates to the tab they clicked). Direct navigation to `/favorite` or `/save` as a guest shows an `Empty` state with a "Log in" button.
@@ -616,4 +623,20 @@ cd docs && npx mint dev              # Mintlify docs preview
 ### 10.2 Future Work
 - Object storage (S3 or R2) and a CDN for images.
 - Refresh tokens and httpOnly cookie sessions.
-- Albums, captions search, download or share links, and user management UI.
+- Captions search and download links.
+
+---
+
+## 11. Albums (v1.2)
+
+Admin-curated sets of photos (e.g. *Barsat Angkor Wat*) that anyone can browse. A photo can be in any number of albums.
+
+- **Tables:** `albums (id, slug UNIQUE, name, description, cover_photo_id → photos ON DELETE SET NULL, hidden, created_by, created_at, updated_at)` and `album_photos (album_id → albums CASCADE, photo_id → photos CASCADE, added_by, added_at, PK (album_id, photo_id))` with an index on `photo_id`. Migration `0004_albums`.
+- **Permission:** `albums.manage` (admins have it; grantable to users). Managers also see **hidden** albums; everyone else gets 404 for them, and they never appear in photo details or public lists.
+- **Album page query:** keyset over the primary key, newest photo first like All: `FROM album_photos ap CROSS JOIN photos p WHERE ap.album_id = ? AND ap.photo_id < ? AND p.id = ap.photo_id AND p.deleted_at IS NULL ORDER BY ap.photo_id DESC`. `CROSS JOIN` pins `album_photos` as the outer loop; without it SQLite walks every active photo and sorts (covered by the plan tests). Cursor kind `b`.
+- **Delete semantics:** trashed photos stay in their albums but are hidden from album pages, counts and covers until restored. Hard delete removes them (cascade). Deleting an album never touches photos, favorites or saves. Adding skips missing and trashed ids; both add and remove are idempotent and return `changed`.
+- **Cover:** `cover_photo_id` if it is an active photo in the album, else the album's newest active photo. Removing the chosen cover resets it to automatic.
+- **Slug:** generated from the name (`Barsat Angkor Wat` → `barsat-angkor-wat`, `-2`, `-3`… on clashes; non-Latin names → `album`), editable, `^[a-z0-9]+(-[a-z0-9]+)*$`, max 60.
+- **Sharing:** `/albums/:slug` is served with Open Graph tags (name, description or photo count, the cover's share card).
+- **Export:** `GET /admin/photos/export.csv?album=<id>` (combinable with `collection`); every export has an `albums` column (`Album A | Album B`).
+- **Frontend:** **Albums** tab (cover grid) → album page with Share, Export CSV and, for managers, Add photos / Select / Edit / Hide-Publish / Delete. **Select** mode on All, Favorite, Save and album pages (tap to select, shift-click for a range, Esc to finish) with a floating bar: *Add to album…* (pick or create), and in an album *Set as cover* and *Remove*. The viewer has an albums button (toggle membership) and the info panel links the photo's albums.

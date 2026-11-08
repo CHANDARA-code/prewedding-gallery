@@ -48,7 +48,8 @@ download, and an admin can grant them any of these extra permissions:
 | `photos.edit` | `PATCH /admin/photos/{id}`, `POST /admin/photos/{id}/rotate` |
 | `photos.delete` | `GET /admin/photos` (trash view), `DELETE /admin/photos/{id}`, `POST /admin/photos/{id}/restore`, opening trashed photos |
 | `photos.purge` | `DELETE /admin/photos/{id}/permanent` |
-| `photos.export` | `GET /admin/photos/export.csv` (`?status=active\|deleted\|all`, `&collection=favorites\|saves`, `&mine=true`). Columns start with `id, source_zip, original_file_name, detail_url, favorites, favorited_by, saves, saved_by` |
+| `photos.export` | `GET /admin/photos/export.csv` (`?status=active\|deleted\|all`, `&collection=favorites\|saves`, `&mine=true`, `&album={id}`). Columns start with `id, source_zip, original_file_name, detail_url, favorites, favorited_by, saves, saved_by, albums` |
+| `albums.manage` | `POST /admin/albums`, `PATCH` / `DELETE /admin/albums/{id}`, `POST /admin/albums/{id}/photos` and `/photos/remove`; also sees hidden albums |
 | `users.manage` | `/admin/users/*`, **admin role only**, cannot be granted |
 
 `GET /auth/me` and the login response return the effective `permissions` array.

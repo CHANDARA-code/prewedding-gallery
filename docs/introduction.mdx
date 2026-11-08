@@ -21,7 +21,7 @@ Image files are served from `/uploads/*` on the same host (for example
 
 | Role | Can do |
 |---|---|
-| **Guest** (no token) | List and view active photos. |
+| **Guest** (no token) | List and view active photos and published albums. |
 | **User** | Everything a guest can, plus favorite and save photos and list their own favorites and saves. |
 | **Admin** | Everything a user can, plus upload, edit, soft delete, restore and permanently delete photos, and view deleted photos. |
 
@@ -31,9 +31,11 @@ Image files are served from `/uploads/*` on the same host (for example
 |---|---|
 | Auth | `POST /auth/login`, `GET /auth/me` |
 | Photos (public) | `GET /photos`, `GET /photos/{id}` |
+| Albums (public) | `GET /albums`, `GET /albums/{slug}`, `GET /albums/{slug}/photos` |
 | Favorites | `GET /me/favorites`, `PUT` / `DELETE /photos/{id}/favorite` |
 | Saves | `GET /me/saves`, `PUT` / `DELETE /photos/{id}/save` |
 | Admin | `GET` / `POST /admin/photos`, `PATCH` / `DELETE /admin/photos/{id}`, `POST /admin/photos/{id}/restore`, `DELETE /admin/photos/{id}/permanent` |
+| Admin albums | `POST /admin/albums`, `PATCH` / `DELETE /admin/albums/{id}`, `POST /admin/albums/{id}/photos`, `POST /admin/albums/{id}/photos/remove` |
 
 Every list endpoint uses [cursor pagination](/pagination). Errors share [one shape](/errors).
 

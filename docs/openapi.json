@@ -222,7 +222,7 @@
     },
     "/api/v1/photos/{id}": {
       "get": {
-        "description": "Photo detail with `mimeType`, `sizeBytes` and camera `exif`. Soft-deleted photos return 404 except for admins, who also get `uploadedBy` and `originalName`.",
+        "description": "Photo detail with `mimeType`, `sizeBytes`, camera `exif` and the `albums` it is in. Soft-deleted photos return 404 except for admins, who also get `uploadedBy` and `originalName`.",
         "operationId": "PhotosController_get",
         "parameters": [
           {
@@ -269,7 +269,7 @@
     },
     "/api/v1/admin/photos/export.csv": {
       "get": {
-        "description": "One row per photo: source zip, original file name, detail link, favorite/save counts and who favorited/saved it, then title, caption, size, dimensions, camera EXIF, uploader and dates. `collection=favorites|saves` keeps only photos someone favorited/saved (`mine=true`: only yours). UTF-8 with BOM (opens correctly in Excel).",
+        "description": "One row per photo: source zip, original file name, detail link, favorite/save counts and who favorited/saved it, then title, caption, size, dimensions, camera EXIF, uploader and dates. `collection=favorites|saves` keeps only photos someone favorited/saved (`mine=true`: only yours); `album=<id>` keeps only the photos in that album. The `albums` column lists every album a photo is in. UTF-8 with BOM (opens correctly in Excel).",
         "operationId": "AdminPhotosController_exportCsv",
         "parameters": [
           {
@@ -309,6 +309,16 @@
             "schema": {
               "default": false,
               "type": "boolean"
+            }
+          },
+          {
+            "name": "album",
+            "required": false,
+            "in": "query",
+            "description": "Only photos in this album (its `id`).",
+            "schema": {
+              "example": 3,
+              "type": "number"
             }
           }
         ],
@@ -1575,6 +1585,531 @@
           "Users"
         ]
       }
+    },
+    "/api/v1/albums": {
+      "get": {
+        "description": "Every album, newest first, with photo count and cover. Public. Hidden albums are included only for accounts with `albums.manage`.",
+        "operationId": "AlbumsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AlbumDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List albums",
+        "tags": [
+          "Albums"
+        ]
+      }
+    },
+    "/api/v1/albums/{slug}": {
+      "get": {
+        "description": "Album by its link name (`slug`). Hidden albums return 404 unless you can manage albums.",
+        "operationId": "AlbumsController_get",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlbumDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get an album",
+        "tags": [
+          "Albums"
+        ]
+      }
+    },
+    "/api/v1/albums/{slug}/photos": {
+      "get": {
+        "description": "The album's active photos, newest first, cursor-paginated (same shape as `GET /photos`). Send a bearer token to also get `isFavorite` and `isSaved`.",
+        "operationId": "AlbumsController_photos",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Page size. Clamped to 1-60.",
+            "schema": {
+              "minimum": 1,
+              "maximum": 60,
+              "default": 24,
+              "example": 24,
+              "type": "number"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Opaque cursor from the previous page's `nextCursor`. Omit for the first page.",
+            "schema": {
+              "example": "eyJrIjoicCIsImlkIjoxMDB9",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhotoListDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed cursor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List album photos",
+        "tags": [
+          "Albums"
+        ]
+      }
+    },
+    "/api/v1/admin/albums": {
+      "post": {
+        "description": "The link name (`slug`) is generated from the name unless given. Optionally pass `photoIds` to fill it straight away.",
+        "operationId": "AdminAlbumsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAlbumDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlbumDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Needs the `albums.manage` permission (admins have it)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Slug already in use",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create album",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/albums/{id}": {
+      "patch": {
+        "description": "Rename, describe, hide/publish, change the link name or pick the cover photo.",
+        "operationId": "AdminAlbumsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAlbumDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlbumDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Needs the `albums.manage` permission (admins have it)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Slug already in use",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update album",
+        "tags": [
+          "Admin"
+        ]
+      },
+      "delete": {
+        "description": "Deletes the album only. Its photos, favorites and saves are untouched.",
+        "operationId": "AdminAlbumsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Needs the `albums.manage` permission (admins have it)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete album",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/albums/{id}/photos": {
+      "post": {
+        "description": "Idempotent. Photos already in the album, missing or in the trash are skipped; `changed` says how many were added.",
+        "operationId": "AdminAlbumsController_addPhotos",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AlbumPhotosDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlbumPhotosResultDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Needs the `albums.manage` permission (admins have it)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Add photos to album",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/albums/{id}/photos/remove": {
+      "post": {
+        "description": "Idempotent. The photos themselves are not deleted.",
+        "operationId": "AdminAlbumsController_removePhotos",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AlbumPhotosDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlbumPhotosResultDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Needs the `albums.manage` permission (admins have it)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remove photos from album",
+        "tags": [
+          "Admin"
+        ]
+      }
     }
   },
   "info": {
@@ -1651,6 +2186,7 @@
                 "photos.delete",
                 "photos.purge",
                 "photos.export",
+                "albums.manage",
                 "users.manage"
               ]
             }
@@ -1818,6 +2354,31 @@
             "example": "KSNT0990.jpg",
             "nullable": true,
             "description": "Admin only: the uploaded file name."
+          },
+          "albums": {
+            "type": "array",
+            "description": "Detail only: the albums this photo is in (hidden albums only for album managers).",
+            "example": [
+              {
+                "id": 3,
+                "slug": "barsat-angkor-wat",
+                "name": "Barsat Angkor Wat"
+              }
+            ],
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "slug": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              }
+            }
           }
         },
         "required": [
@@ -1972,7 +2533,8 @@
                 "photos.edit",
                 "photos.delete",
                 "photos.purge",
-                "photos.export"
+                "photos.export",
+                "albums.manage"
               ]
             }
           },
@@ -1990,6 +2552,7 @@
                 "photos.delete",
                 "photos.purge",
                 "photos.export",
+                "albums.manage",
                 "users.manage"
               ]
             }
@@ -2056,7 +2619,8 @@
                 "photos.edit",
                 "photos.delete",
                 "photos.purge",
-                "photos.export"
+                "photos.export",
+                "albums.manage"
               ]
             }
           }
@@ -2102,7 +2666,8 @@
                 "photos.edit",
                 "photos.delete",
                 "photos.purge",
-                "photos.export"
+                "photos.export",
+                "albums.manage"
               ]
             }
           },
@@ -2120,6 +2685,213 @@
             "description": "8-128 characters. Omit to have a strong one generated."
           }
         }
+      },
+      "AlbumCoverDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 41
+          },
+          "thumbUrl": {
+            "type": "string",
+            "example": "/uploads/thumbs/8f2c1a.webp"
+          },
+          "previewUrl": {
+            "type": "string",
+            "example": "/uploads/previews/77ab.webp"
+          },
+          "width": {
+            "type": "number",
+            "example": 3000
+          },
+          "height": {
+            "type": "number",
+            "example": 2000
+          }
+        },
+        "required": [
+          "id",
+          "thumbUrl",
+          "previewUrl",
+          "width",
+          "height"
+        ]
+      },
+      "AlbumDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 3
+          },
+          "slug": {
+            "type": "string",
+            "example": "barsat-angkor-wat",
+            "description": "Used in links: `/albums/{slug}`."
+          },
+          "name": {
+            "type": "string",
+            "example": "Barsat Angkor Wat"
+          },
+          "description": {
+            "type": "string",
+            "example": "Sunrise at the west gate",
+            "nullable": true
+          },
+          "hidden": {
+            "type": "boolean",
+            "example": false,
+            "description": "Hidden albums are only listed for accounts with `albums.manage`."
+          },
+          "photoCount": {
+            "type": "number",
+            "example": 48,
+            "description": "Active (not trashed) photos in the album."
+          },
+          "cover": {
+            "nullable": true,
+            "description": "The chosen cover, else the newest photo in the album.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AlbumCoverDto"
+              }
+            ]
+          },
+          "coverPhotoId": {
+            "type": "number",
+            "example": null,
+            "nullable": true,
+            "description": "The explicitly chosen cover photo id (null = automatic)."
+          },
+          "createdAt": {
+            "type": "string",
+            "example": "2026-11-08T08:30:00.000Z"
+          },
+          "updatedAt": {
+            "type": "string",
+            "example": "2026-11-08T09:10:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name",
+          "description",
+          "hidden",
+          "photoCount",
+          "cover",
+          "coverPhotoId",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "CreateAlbumDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Barsat Angkor Wat"
+          },
+          "description": {
+            "type": "string",
+            "example": "Sunrise at the west gate",
+            "nullable": true
+          },
+          "slug": {
+            "type": "string",
+            "example": "barsat-angkor-wat",
+            "description": "Lowercase letters, digits and dashes. Generated from the name when omitted."
+          },
+          "hidden": {
+            "type": "boolean",
+            "example": false,
+            "default": false,
+            "description": "Hide from guests and users while you build it."
+          },
+          "photoIds": {
+            "example": [
+              12,
+              13,
+              14
+            ],
+            "description": "Photos to put in the album straight away.",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "UpdateAlbumDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Barsat Angkor Wat"
+          },
+          "description": {
+            "type": "string",
+            "example": "Sunrise at the west gate",
+            "nullable": true
+          },
+          "slug": {
+            "type": "string",
+            "example": "barsat-angkor-wat",
+            "description": "Changing it breaks links shared with the old one."
+          },
+          "hidden": {
+            "type": "boolean",
+            "example": false
+          },
+          "coverPhotoId": {
+            "type": "number",
+            "example": 41,
+            "nullable": true,
+            "description": "A photo in the album, or null for automatic (newest photo)."
+          }
+        }
+      },
+      "AlbumPhotosDto": {
+        "type": "object",
+        "properties": {
+          "photoIds": {
+            "example": [
+              12,
+              13,
+              14
+            ],
+            "description": "1 to 1000 photo ids.",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "photoIds"
+        ]
+      },
+      "AlbumPhotosResultDto": {
+        "type": "object",
+        "properties": {
+          "changed": {
+            "type": "number",
+            "example": 3,
+            "description": "How many photos were actually added / removed (already-there or missing ones are skipped)."
+          },
+          "album": {
+            "$ref": "#/components/schemas/AlbumDto"
+          }
+        },
+        "required": [
+          "changed",
+          "album"
+        ]
       }
     }
   }
