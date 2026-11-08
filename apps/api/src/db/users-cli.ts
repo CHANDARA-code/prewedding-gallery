@@ -47,7 +47,8 @@ function table(rows: core.UserView[]) {
 }
 
 async function main() {
-  const [cmd, name, ...rest] = process.argv.slice(2);
+  // `node -r dotenv/config ... dotenv_config_path=...` leaves that option in argv.
+  const [cmd, name, ...rest] = process.argv.slice(2).filter((a) => !a.startsWith('dotenv_config_'));
   const handle = openDb(process.env.DATABASE_URL ?? './data/app.db');
   runMigrations(handle);
   const { db } = handle;
