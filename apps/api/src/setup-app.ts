@@ -5,11 +5,26 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import compression from 'compression';
 import helmet from 'helmet';
 import express, { NextFunction, Request, Response } from 'express';
-import { existsSync } from 'fs';
+import { existsSync, readFileSync, statSync } from 'fs';
 import { join, resolve } from 'path';
 import { AppConfig } from './config/env';
 import { HttpExceptionFilter } from './common/http-exception.filter';
 import { PhotoStorage } from './photos/storage.service';
+import { PhotosRepository } from './photos/photos.repository';
+import { injectOgTags } from './share/og-tags';
+
+const SITE_NAME = 'Pre-Wedding View';
+const SHARE_PATH = /^\/photo\/(\d{1,12})\/?$/;
+
+/** index.html, re-read only when the file changes (a web rebuild without an API restart). */
+function htmlReader(path: string) {
+  let cached = { mtimeMs: -1, html: '' };
+  return () => {
+    const { mtimeMs } = statSync(path);
+    if (mtimeMs !== cached.mtimeMs) cached = { mtimeMs, html: readFileSync(path, 'utf8') };
+    return cached.html;
+  };
+}
 
 export function buildOpenApi(app: NestExpressApplication): OpenAPIObject {
   const config = new DocumentBuilder()
@@ -62,14 +77,45 @@ export function setupApp(app: NestExpressApplication, config: AppConfig) {
           },
         }),
       );
-      // SPA fallback for client-side routes (/favorite, /save, ...).
+      const readIndex = htmlReader(indexHtml);
+      const repo = app.get(PhotosRepository, { strict: false });
+      // SPA fallback for client-side routes (/favorite, /save, /photo/:id, ...). Every page carries
+      // Open Graph tags; a /photo/:id page gets that photo's title, caption and share card.
       app.use((req: Request, res: Response, next: NextFunction) => {
         if ((req.method !== 'GET' && req.method !== 'HEAD') || req.path.startsWith('/api/') || req.path.startsWith('/uploads/')) {
           return next();
         }
         if (!req.accepts('html')) return next();
+        const origin = config.publicUrl ?? `${req.protocol}://${req.get('host')}`;
+        let og = {
+          title: SITE_NAME,
+          description: 'Our pre-wedding photo gallery.',
+          url: `${origin}${req.path === '/' ? '/' : req.path}`,
+          image: '',
+          imageAlt: SITE_NAME,
+          siteName: SITE_NAME,
+        };
+        const m = SHARE_PATH.exec(req.path);
+        const shared = m ? repo.findById(Number(m[1]), null) : undefined;
+        const cardOf = (r: { id: number; previewFilename?: string | null; thumbFilename: string }) =>
+          `${origin}/api/v1/photos/${r.id}/og.jpg?v=${encodeURIComponent((r.previewFilename ?? r.thumbFilename).slice(0, 8))}`;
+        if (shared && !shared.deletedAt) {
+          const name = shared.title || `Photo #${shared.id}`;
+          og = {
+            ...og,
+            title: `${name} · ${SITE_NAME}`,
+            description: shared.caption || 'Tap to view this photo from our pre-wedding gallery.',
+            url: `${origin}/photo/${shared.id}`,
+            image: cardOf(shared),
+            imageAlt: shared.caption || name,
+          };
+        } else {
+          const cover = repo.listPublic(null, null, 1)[0]; // newest photo as the gallery's cover
+          if (cover) og.image = cardOf(cover);
+        }
+        const html = og.image ? injectOgTags(readIndex(), og) : readIndex();
         res.setHeader('Cache-Control', 'no-cache');
-        res.sendFile(indexHtml);
+        res.type('html').send(html);
       });
     }
   }
