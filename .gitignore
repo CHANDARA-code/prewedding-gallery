@@ -1,0 +1,13 @@
+node_modules/
+dist/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+# runtime data
+apps/api/uploads/
+apps/api/data/
+# source photo archives and their extracted contents
+*.zip
+photos/
