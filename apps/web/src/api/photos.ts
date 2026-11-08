@@ -4,6 +4,7 @@ import {
   QueryKey,
   useInfiniteQuery,
   useMutation,
+  useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
 import { api } from './client';
@@ -62,6 +63,22 @@ export function flattenPages(data: InfiniteData<PhotoPage, unknown> | undefined)
   return out;
 }
 
+/** Viewer image: the preview when the API has one, else the original. */
+export const viewUrl = (p: Photo) => p.previewUrl || p.url;
+
+export const photoKey = (id: number) => ['photo', id] as const;
+
+/** Photo detail (EXIF, size, type; original name for admins). Seeded from list data when available. */
+export function usePhotoDetail(id: number | null, seed?: Photo) {
+  return useQuery({
+    queryKey: photoKey(id ?? 0),
+    queryFn: ({ signal }) => api.get<Photo>(`/photos/${id}`, { signal }).then((r) => r.data),
+    enabled: id !== null,
+    staleTime: 5 * 60_000,
+    placeholderData: seed,
+  });
+}
+
 /* ---------- cache helpers ---------- */
 
 type ItemUpdater = (item: Photo, key: QueryKey) => Photo | null;
@@ -109,10 +126,13 @@ export function useToggle(kind: ToggleKind) {
         if (!on && key[1] === kind) return null;
         return { ...item, [flag]: on };
       });
-      return { snap };
+      const detail = qc.getQueryData<Photo>(photoKey(photo.id));
+      if (detail) qc.setQueryData<Photo>(photoKey(photo.id), { ...detail, [flag]: on });
+      return { snap, detail };
     },
-    onError: (_err, _vars, ctx) => {
+    onError: (_err, { photo }, ctx) => {
       if (ctx) restore(qc, ctx.snap);
+      if (ctx?.detail) qc.setQueryData(photoKey(photo.id), ctx.detail);
     },
     onSuccess: (_res, { on }) => {
       // Favoriting adds nothing to the Favorite tab's cache; refetch it fresh when next opened.
@@ -177,8 +197,37 @@ export function useUpdatePhoto() {
       updateCachedPhotos(qc, (item) =>
         item.id === updated.id ? { ...item, title: updated.title, caption: updated.caption } : item,
       );
+      qc.setQueryData<Photo>(photoKey(updated.id), (old) => (old ? { ...old, title: updated.title, caption: updated.caption } : old));
     },
   });
+}
+
+/** Rotates how a photo is displayed everywhere; every cached list and detail picks up the new renderings. */
+export function useRotate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, degrees }: { id: number; degrees: 90 | -90 | 180 }) =>
+      api.post<Photo>(`/admin/photos/${id}/rotate`, { degrees }).then((r) => r.data),
+    onSuccess: (u) => {
+      const patch = { width: u.width, height: u.height, thumbUrl: u.thumbUrl, previewUrl: u.previewUrl, rotation: u.rotation };
+      updateCachedPhotos(qc, (item) => (item.id === u.id ? { ...item, ...patch } : item));
+      qc.setQueryData<Photo>(photoKey(u.id), (old) => (old ? { ...old, ...patch } : u));
+    },
+  });
+}
+
+/** Downloads the admin CSV export (bearer auth, so it goes through axios rather than a plain link). */
+export async function downloadPhotosCsv(status: AdminStatus | 'all' = 'all') {
+  const res = await api.get<Blob>('/admin/photos/export.csv', { params: { status }, responseType: 'blob' });
+  const disposition = String(res.headers['content-disposition'] ?? '');
+  const name = /filename="([^"]+)"/.exec(disposition)?.[1] ?? `prewedding-photos-${status}.csv`;
+  const href = URL.createObjectURL(res.data);
+  const a = Object.assign(document.createElement('a'), { href, download: name });
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(href), 10_000);
+  return name;
 }
 
 export function useUpload() {
