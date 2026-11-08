@@ -727,3 +727,145 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* ---------- Users (admin) ---------- */
+.users-page {
+  max-width: 760px;
+  margin: 0 auto;
+}
+.users-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 6px 0 8px;
+}
+.users-title {
+  font-size: 30px;
+  line-height: 1.1;
+  margin: 0;
+  color: var(--ink);
+}
+.users-sub,
+.users-note {
+  color: var(--muted);
+  margin: 2px 0 0;
+  font-size: 13px;
+}
+.users-note {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  background: var(--rose-soft);
+  border-radius: 10px;
+  line-height: 1.5;
+}
+.user-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.user-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 12px 14px 16px;
+}
+.user-row + .user-row {
+  border-top: 1px solid var(--line);
+}
+.user-row.is-disabled .user-main {
+  opacity: 0.55;
+}
+.user-avatar {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 600;
+  background: var(--card-bg);
+  color: var(--ink);
+}
+.user-avatar.is-admin {
+  background: var(--rose);
+  color: #fff;
+}
+.user-main {
+  flex: 1;
+  min-width: 0;
+}
+.user-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+}
+.user-handle {
+  font-weight: 600;
+  font-size: 15px;
+  margin-right: 2px;
+  overflow-wrap: anywhere;
+}
+.user-perms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 0;
+  margin-top: 6px;
+}
+.user-perm-all,
+.user-meta {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.user-meta {
+  margin-top: 4px;
+}
+.user-actions {
+  flex: none;
+  display: flex;
+  gap: 2px;
+}
+.perm-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.form-hint {
+  color: var(--muted);
+  font-size: 12.5px;
+  margin: -16px 0 16px;
+}
+.cred-list {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px 14px;
+  align-items: center;
+  margin: 0;
+}
+.cred-list dt {
+  color: var(--muted);
+}
+.cred-list dd {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.cred-password {
+  font-size: 15px;
+  word-break: break-all;
+}
+@media (max-width: 480px) {
+  .users-title {
+    font-size: 26px;
+  }
+  .user-row {
+    padding: 12px 6px 12px 12px;
+  }
+}

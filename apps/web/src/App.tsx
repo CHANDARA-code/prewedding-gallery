@@ -6,6 +6,7 @@ import { AppHeader } from './components/AppHeader';
 import { AllPage } from './pages/AllPage';
 import { FavoritePage } from './pages/FavoritePage';
 import { SavePage } from './pages/SavePage';
+import { UsersPage } from './pages/UsersPage';
 
 const TABS = [
   { key: '/', label: 'All', icon: <PictureOutlined aria-hidden />, auth: false },
@@ -23,7 +24,8 @@ export function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, ready, openLogin } = useAuth();
-  const activeKey = TABS.some((t) => t.key === location.pathname) ? location.pathname : '/';
+  // /users is reached from the account menu, not a tab, so no tab is highlighted there.
+  const activeKey = TABS.some((t) => t.key === location.pathname) ? location.pathname : location.pathname === '/users' ? '' : '/';
 
   const onTabChange = (key: string) => {
     const tab = TABS.find((t) => t.key === key);
@@ -59,6 +61,7 @@ export function App() {
           <Route path="/" element={<AllPage />} />
           <Route path="/favorite" element={<FavoritePage />} />
           <Route path="/save" element={<SavePage />} />
+          <Route path="/users" element={<UsersPage />} />
           <Route path="/photo/:id" element={<SharedPhoto />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
