@@ -85,12 +85,40 @@ describe('CSV export', () => {
     expect(res.headers['content-type']).toMatch(/text\/csv/);
     expect(res.headers['content-disposition']).toMatch(/attachment; filename="prewedding-photos-active-/);
     const lines = res.text.replace(/^﻿/, '').trim().split('\r\n');
-    expect(lines[0]).toMatch(/^id,original_file_name,stored_file_name,title/);
+    expect(lines[0]).toMatch(/^id,source_zip,original_file_name,detail_url,favorites,favorited_by,saves,saved_by,title/);
     const row = lines.find((l) => l.startsWith(`${p.id},`))!;
-    expect(row).toContain('IMG_0001.jpg');
+    expect(row.startsWith(`${p.id},web upload,IMG_0001.jpg,https://example.test/photo/${p.id},0,,0,,`)).toBe(true);
     expect(row).toContain(`"'=HYPERLINK(""x"")"`); // formula injection defused
     expect(row).toContain(`https://example.test/photo/${p.id}`);
     expect(row).toContain('Canon EOS R6');
+  });
+
+  it('exports only favorited / saved photos with who picked them, and the zip they came from', async () => {
+    const [a, b, c] = [await upload('KSNT0001.jpg'), await upload('KSNT0002.jpg'), await upload('KSNT0003.jpg')];
+    ctx.sqlite.prepare("UPDATE photos SET source_archive = 'A.zip' WHERE id = ?").run(a.id);
+    await ctx.http.put(`${api}/photos/${a.id}/favorite`).set(bearer(ctx.tokens.demo)).expect(204);
+    await ctx.http.put(`${api}/photos/${a.id}/favorite`).set(bearer(ctx.tokens.admin)).expect(204);
+    await ctx.http.put(`${api}/photos/${b.id}/favorite`).set(bearer(ctx.tokens.demo)).expect(204);
+    await ctx.http.put(`${api}/photos/${c.id}/save`).set(bearer(ctx.tokens.admin)).expect(204);
+    const csv = async (q: string) => {
+      const res = await ctx.http.get(`${api}/admin/photos/export.csv?${q}`).set(bearer(ctx.tokens.admin)).expect(200);
+      return { name: res.headers['content-disposition'], rows: res.text.replace(/^\uFEFF/, '').trim().split('\r\n').slice(1) };
+    };
+
+    const favs = await csv('collection=favorites');
+    expect(favs.name).toMatch(/filename="prewedding-favorites-/);
+    expect(favs.rows.map((r) => Number(r.split(',')[0]))).toEqual([b.id, a.id]);
+    expect(favs.rows[1].startsWith(`${a.id},A.zip,KSNT0001.jpg,https://example.test/photo/${a.id},2,"admin, demo",0,,`)).toBe(true);
+
+    const mine = await csv('collection=favorites&mine=true');
+    expect(mine.name).toMatch(/filename="prewedding-admin-favorites-/);
+    expect(mine.rows.map((r) => Number(r.split(',')[0]))).toEqual([a.id]);
+    expect((await csv('collection=favorites&mine=false')).rows).toHaveLength(2);
+
+    const saves = await csv('collection=saves');
+    expect(saves.rows.map((r) => Number(r.split(',')[0]))).toEqual([c.id]);
+    expect(saves.rows[0]).toContain(',KSNT0003.jpg,');
+    expect(saves.rows[0]).toContain(',1,admin,');
   });
 
   it('is admin only', async () => {

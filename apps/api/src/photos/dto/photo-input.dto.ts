@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsBoolean, IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
 
 export class UpdatePhotoDto {
   @ApiPropertyOptional({ example: 'Golden hour', nullable: true, type: String })
@@ -39,4 +39,16 @@ export class ExportQueryDto {
   @IsOptional()
   @IsIn(['active', 'deleted', 'all'])
   status: 'active' | 'deleted' | 'all' = 'all';
+
+  @ApiPropertyOptional({ enum: ['all', 'favorites', 'saves'], default: 'all', description: 'Only photos someone favorited / saved.' })
+  @IsOptional()
+  @IsIn(['all', 'favorites', 'saves'])
+  collection: 'all' | 'favorites' | 'saves' = 'all';
+
+  @ApiPropertyOptional({ type: Boolean, default: false, description: 'With `collection`: only your own favorites / saves.' })
+  @IsOptional()
+  // Read the raw query string: implicit conversion would turn "false" into true.
+  @Transform(({ obj, key }) => [true, 'true', '1'].includes((obj as Record<string, unknown>)[key] as string))
+  @IsBoolean()
+  mine = false;
 }

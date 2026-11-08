@@ -65,18 +65,24 @@ export class AdminPhotosController {
   @ApiOperation({
     summary: 'Export photos as CSV',
     description:
-      'One row per photo with the original file name, stored file name, title, caption, size, dimensions, orientation, camera EXIF, uploader, dates and favorite/save counts. UTF-8 with BOM (opens correctly in Excel).',
+      'One row per photo: source zip, original file name, detail link, favorite/save counts and who favorited/saved it, then title, caption, size, dimensions, camera EXIF, uploader and dates. `collection=favorites|saves` keeps only photos someone favorited/saved (`mine=true`: only yours). UTF-8 with BOM (opens correctly in Excel).',
   })
   @ApiOkResponse({ description: 'text/csv attachment', content: { 'text/csv': { schema: { type: 'string' } } } })
   exportCsv(@Query() q: ExportQueryDto, @CurrentUser() user: AuthUser, @Req() req: Request, @Res() res: Response) {
     const publicUrl = this.config.publicUrl ?? `${req.protocol}://${req.get('host')}`;
-    const { csv, rows } = buildPhotosCsv(this.db, q.status, publicUrl);
+    const { csv, rows } = buildPhotosCsv(this.db, {
+      status: q.status,
+      collection: q.collection,
+      mineUserId: q.collection !== 'all' && q.mine ? user.id : undefined,
+      publicUrl,
+    });
     const date = new Date().toISOString().slice(0, 10);
+    const what = q.collection === 'all' ? `photos-${q.status}` : `${q.mine ? `${user.username}-` : ''}${q.collection}`;
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="prewedding-photos-${q.status}-${date}.csv"`);
+    res.setHeader('Content-Disposition', `attachment; filename="prewedding-${what}-${date}.csv"`);
     res.send(csv);
-    this.events.emit(AppEvents.PhotosExported, { actor: user, rows, status: q.status });
+    this.events.emit(AppEvents.PhotosExported, { actor: user, rows, status: q.collection === 'all' ? q.status : `${q.mine ? 'my ' : ''}${q.collection}` });
   }
 
   @Get()
