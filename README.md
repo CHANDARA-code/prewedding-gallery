@@ -84,13 +84,13 @@ delete. The same rules are available from the shell:
 
 ```bash
 cd apps/api
-U="node -r dotenv/config dist/db/users-cli.js"; E="dotenv_config_path=.env.production"
-$U list $E
-$U create dara user --grant photos.upload,photos.export $E   # or: create tithya admin
-$U set dara --role admin $E                                   # --grant a,b|none  --disable  --enable
-$U reset-password dara $E
-$U delete dara $E
-$U permissions $E
+users() { node -r dotenv/config dist/db/users-cli.js "$@" dotenv_config_path=.env.production; }   # bash and zsh
+users list
+users create dara user --grant photos.upload,photos.export   # or: users create tithya admin
+users set dara --role admin                                   # --grant a,b|none  --disable  --enable
+users reset-password dara
+users delete dara
+users permissions
 ```
 
 Set `NEW_PASSWORD` to choose the password; otherwise a strong one is generated and printed once. Admins have every
