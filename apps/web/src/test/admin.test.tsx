@@ -1,5 +1,6 @@
-import { screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { screen, waitFor } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
 import { adminUser, demoUser, mockApi, page, range, renderApp } from './utils';
 
 describe('admin controls', () => {
@@ -30,5 +31,18 @@ describe('admin controls', () => {
     expect(screen.getByText('Admin')).toBeInTheDocument();
     expect(screen.getByText('Trash')).toBeInTheDocument();
     expect(calls.find((c) => c.url === '/admin/photos')?.params.status).toBe('active');
+  });
+
+  it('exports my favorites as CSV from the Favorite tab', async () => {
+    vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: () => 'blob:x', revokeObjectURL: () => undefined }));
+    const calls = mockApi(({ url }) => {
+      if (url === '/auth/me') return { status: 200, data: adminUser };
+      if (url === '/me/favorites') return { status: 200, data: page(range(3, 1), null) };
+      if (url === '/admin/photos/export.csv') return { status: 200, data: new Blob(['id']) };
+      return { status: 404 };
+    });
+    renderApp('/favorite', { token: 'tok' });
+    await userEvent.setup().click(await screen.findByRole('button', { name: /Export CSV/ }));
+    await waitFor(() => expect(calls.find((c) => c.url === '/admin/photos/export.csv')?.params).toEqual({ status: 'all', collection: 'favorites', mine: true }));
   });
 });

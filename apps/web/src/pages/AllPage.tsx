@@ -1,8 +1,6 @@
 import { useState } from 'react';
-import { App, Button, Segmented, Tooltip } from 'antd';
-import { FileExcelOutlined } from '@ant-design/icons';
-import { downloadPhotosCsv } from '../api/photos';
-import { errorMessage } from '../api/client';
+import { Segmented } from 'antd';
+import { ExportCsvButton } from '../components/ExportCsvButton';
 import type { AdminStatus } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { emptyStates, GalleryView } from '../components/GalleryView';
@@ -14,30 +12,19 @@ export function AllPage() {
   const { can } = useAuth();
   const seesTrash = can('photos.delete');
   const canExport = can('photos.export');
-  const { message } = App.useApp();
   const [status, setStatus] = useState<AdminStatus>(lastAdminStatus);
-  const [exporting, setExporting] = useState(false);
-
-  const exportCsv = async () => {
-    setExporting(true);
-    try {
-      const name = await downloadPhotosCsv(status);
-      message.success(`Downloaded ${name}`);
-    } catch (err) {
-      message.error(errorMessage(err, "Couldn't export the CSV"));
-    } finally {
-      setExporting(false);
-    }
-  };
 
   if (!seesTrash && !canExport) return <GalleryView scope="all" empty={emptyStates.all} />;
 
-  const exportButton = canExport && (
-    <Tooltip title="CSV with original file names, sizes, camera data and favorite/save counts for the photos in this filter">
-      <Button icon={<FileExcelOutlined aria-hidden />} onClick={exportCsv} loading={exporting}>
-        Export CSV
-      </Button>
-    </Tooltip>
+  const statusLabel = { active: 'Active photos', deleted: 'Photos in trash', all: 'All photos incl. trash' }[status];
+  const exportButton = (
+    <ExportCsvButton
+      main={{ key: 'filter', label: `${statusLabel} (this filter)`, status }}
+      more={[
+        { key: 'fav', label: 'Only favorited photos (who favorited)', collection: 'favorites' },
+        { key: 'save', label: 'Only saved photos (who saved)', collection: 'saves' },
+      ]}
+    />
   );
 
   // Export only (no trash access): the normal gallery plus the export button.

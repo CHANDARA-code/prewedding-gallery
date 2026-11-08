@@ -217,8 +217,17 @@ export function useRotate() {
 }
 
 /** Downloads the admin CSV export (bearer auth, so it goes through axios rather than a plain link). */
-export async function downloadPhotosCsv(status: AdminStatus | 'all' = 'all') {
-  const res = await api.get<Blob>('/admin/photos/export.csv', { params: { status }, responseType: 'blob' });
+export interface CsvExport {
+  status?: AdminStatus;
+  /** Only photos someone favorited / saved. */
+  collection?: 'all' | 'favorites' | 'saves';
+  /** With a collection: only the signed-in user's own. */
+  mine?: boolean;
+}
+
+export async function downloadPhotosCsv({ status = 'all', collection = 'all', mine = false }: CsvExport = {}) {
+  const params = { status, ...(collection !== 'all' && { collection, mine }) };
+  const res = await api.get<Blob>('/admin/photos/export.csv', { params, responseType: 'blob' });
   const disposition = String(res.headers['content-disposition'] ?? '');
   const name = /filename="([^"]+)"/.exec(disposition)?.[1] ?? `prewedding-photos-${status}.csv`;
   const href = URL.createObjectURL(res.data);
