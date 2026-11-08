@@ -1,9 +1,39 @@
 export type Role = 'user' | 'admin';
 
+/** Actions beyond browsing. Admins have all of them; a user only the ones granted. */
+export type Permission = 'photos.upload' | 'photos.edit' | 'photos.delete' | 'photos.purge' | 'photos.export' | 'users.manage';
+
 export interface User {
   id: number;
   username: string;
   role: Role;
+  /** Effective permissions (older API responses omit it; admins then get everything). */
+  permissions?: Permission[];
+}
+
+/** A row on the admin Users screen. */
+export interface ManagedUser {
+  id: number;
+  username: string;
+  role: Role;
+  grants: Permission[];
+  permissions: Permission[];
+  disabled: boolean;
+  createdAt: string;
+  lastLoginAt: string | null;
+  photosUploaded: number;
+}
+
+export interface PermissionInfo {
+  key: Permission;
+  label: string;
+  grantable: boolean;
+}
+
+export interface UserWithPassword {
+  user: ManagedUser;
+  /** Only when the server generated it; shown once. */
+  generatedPassword?: string;
 }
 
 export interface Photo {

@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { App } from 'antd';
 import { api, setUnauthorizedHandler, tokenStore } from '../api/client';
-import type { LoginResponse, User } from '../api/types';
+import type { LoginResponse, Permission, User } from '../api/types';
 import { LoginModal } from './LoginModal';
 
 interface AuthState {
@@ -11,6 +11,10 @@ interface AuthState {
   /** False until a stored token has been checked against `/auth/me`. */
   ready: boolean;
   isAdmin: boolean;
+  /** Whether the signed-in user may perform an action (UI hint only; the API enforces it). */
+  can: (permission: Permission) => boolean;
+  /** Any photo-management permission: shows the per-photo admin menu and the admin fields. */
+  canManagePhotos: boolean;
   login: (username: string, password: string) => Promise<User>;
   logout: () => void;
   /** Opens the login modal; on success navigates to `redirectTo` when given. */
@@ -84,10 +88,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoginOpen(true);
   }, []);
 
-  const value = useMemo<AuthState>(
-    () => ({ user, ready, isAdmin: user?.role === 'admin', login, logout, openLogin }),
-    [user, ready, login, logout, openLogin],
-  );
+  const value = useMemo<AuthState>(() => {
+    const isAdmin = user?.role === 'admin';
+    const perms = new Set<Permission>(user?.permissions ?? []);
+    const can = (p: Permission) => isAdmin || perms.has(p);
+    const canManagePhotos = (['photos.edit', 'photos.delete', 'photos.purge', 'photos.export'] as const).some(can);
+    return { user, ready, isAdmin, can, canManagePhotos, login, logout, openLogin };
+  }, [user, ready, login, logout, openLogin]);
 
   return (
     <AuthContext.Provider value={value}>

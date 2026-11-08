@@ -83,7 +83,7 @@ const RESET: View = { scale: 1, x: 0, y: 0 };
  * instantly and the 2048px preview fades in over it. Zooming past HD_SCALE swaps in the original.
  */
 export function PhotoViewer({ photos, photoId, onNavigate, onClose, hasNextPage, isFetchingNextPage, fetchNextPage }: Props) {
-  const { user, isAdmin, openLogin } = useAuth();
+  const { user, can, canManagePhotos, openLogin } = useAuth();
   const { message } = App.useApp();
   const index = photos.findIndex((p) => p.id === photoId);
   const listItem = index >= 0 ? photos[index] : undefined;
@@ -448,7 +448,7 @@ export function PhotoViewer({ photos, photoId, onNavigate, onClose, hasNextPage,
           <Tooltip title="Download original (D)">
             <Button type="text" className="viewer-btn" aria-label="Download original" icon={<DownloadOutlined />} onClick={download} disabled={!photo} />
           </Tooltip>
-          {isAdmin && photo && (
+          {can('photos.edit') && photo && (
             <>
               <Tooltip title="Rotate left (admin, applies everywhere)">
                 <Button type="text" className="viewer-btn" aria-label="Rotate left" icon={<RotateLeftOutlined />} onClick={() => onRotate(-90)} loading={busy} />
@@ -538,7 +538,7 @@ export function PhotoViewer({ photos, photoId, onNavigate, onClose, hasNextPage,
 
         {infoOpen && photo && (
           <aside className="viewer-info" role="complementary" aria-label="Photo details">
-            <PhotoInfo photo={photo} loading={detail.isFetching} isAdmin={isAdmin} />
+            <PhotoInfo photo={photo} loading={detail.isFetching} isAdmin={canManagePhotos} />
           </aside>
         )}
       </div>

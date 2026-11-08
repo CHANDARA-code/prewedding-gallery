@@ -32,7 +32,7 @@ interface Props {
 const stop = (e: MouseEvent) => e.stopPropagation();
 
 function PhotoCardInner({ photo, width, height, priority, onOpen }: Props) {
-  const { user, isAdmin, openLogin } = useAuth();
+  const { user, can, openLogin } = useAuth();
   const { message } = App.useApp();
   const toggleFavorite = useToggle('favorite');
   const toggleSave = useToggle('save');
@@ -118,7 +118,7 @@ function PhotoCardInner({ photo, width, height, priority, onOpen }: Props) {
         )}
       </div>
 
-      {isAdmin && (
+      {(can('photos.edit') || can('photos.delete') || can('photos.purge')) && (
         <div className="card-admin" onClick={stop}>
           <AdminMenu photo={photo} />
         </div>
@@ -129,6 +129,7 @@ function PhotoCardInner({ photo, width, height, priority, onOpen }: Props) {
 
 function AdminMenu({ photo }: { photo: Photo }) {
   const { message, modal } = App.useApp();
+  const { can } = useAuth();
   const softDelete = useSoftDelete();
   const restore = useRestore();
   const hardDelete = useHardDelete();
@@ -157,20 +158,19 @@ function AdminMenu({ photo }: { photo: Photo }) {
     { key: 'rot-right', icon: <RotateRightOutlined />, label: 'Rotate right' },
     { key: 'rot-180', icon: <RotateRightOutlined />, label: 'Rotate 180°' },
   ];
-  const items: MenuProps['items'] = deleted
-    ? [
-        { key: 'restore', icon: <UndoOutlined />, label: 'Restore' },
-        ...rotateItems,
-        { type: 'divider' },
-        { key: 'hard', icon: <DeleteOutlined />, label: 'Delete permanently', danger: true },
-      ]
-    : [
-        { key: 'edit', icon: <EditOutlined />, label: 'Edit details' },
-        ...rotateItems,
-        { key: 'soft', icon: <DeleteOutlined />, label: 'Delete' },
-        { type: 'divider' },
-        { key: 'hard', icon: <DeleteOutlined />, label: 'Delete permanently', danger: true },
-      ];
+  // Only the actions this account is allowed to perform.
+  const edit = can('photos.edit');
+  const trash = can('photos.delete');
+  const purge = can('photos.purge');
+  const items: MenuProps['items'] = [
+    ...(deleted
+      ? [trash && { key: 'restore', icon: <UndoOutlined />, label: 'Restore' }]
+      : [edit && { key: 'edit', icon: <EditOutlined />, label: 'Edit details' }]),
+    ...(edit ? rotateItems : []),
+    !deleted && trash && { key: 'soft', icon: <DeleteOutlined />, label: 'Delete' },
+    purge && (edit || trash) && { type: 'divider' as const },
+    purge && { key: 'hard', icon: <DeleteOutlined />, label: 'Delete permanently', danger: true },
+  ].filter(Boolean) as MenuProps['items'];
 
   const onMenu: MenuProps['onClick'] = ({ key }) => {
     if (key.startsWith('rot-')) {

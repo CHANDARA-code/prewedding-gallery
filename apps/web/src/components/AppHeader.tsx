@@ -1,13 +1,15 @@
 import { Button, Dropdown, FloatButton, Tag, Tooltip } from 'antd';
-import { CloudUploadOutlined, LoginOutlined, LogoutOutlined, UserOutlined } from '@ant-design/icons';
+import { CloudUploadOutlined, LoginOutlined, LogoutOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons';
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { useIsMobile } from '../hooks/useColumns';
 import { UploadModal } from './UploadModal';
 
 export function AppHeader() {
-  const { user, isAdmin, ready, openLogin, logout } = useAuth();
+  const { user, isAdmin, can, ready, openLogin, logout } = useAuth();
+  const canUpload = can('photos.upload');
+  const navigate = useNavigate();
   const mobile = useIsMobile();
   const [uploadOpen, setUploadOpen] = useState(false);
 
@@ -22,7 +24,7 @@ export function AppHeader() {
         </Link>
 
         <div className="header-actions">
-          {isAdmin && !mobile && (
+          {canUpload && !mobile && (
             <Button icon={<CloudUploadOutlined aria-hidden />} onClick={() => setUploadOpen(true)}>
               Upload
             </Button>
@@ -33,8 +35,14 @@ export function AppHeader() {
               trigger={['click']}
               placement="bottomRight"
               menu={{
-                items: [{ key: 'logout', icon: <LogoutOutlined />, label: 'Log out' }],
-                onClick: ({ key }) => key === 'logout' && logout(),
+                items: [
+                  ...(isAdmin ? [{ key: 'users', icon: <TeamOutlined />, label: 'Manage users' }] : []),
+                  { key: 'logout', icon: <LogoutOutlined />, label: 'Log out' },
+                ],
+                onClick: ({ key }) => {
+                  if (key === 'users') navigate('/users');
+                  if (key === 'logout') logout();
+                },
               }}
             >
               <Button type="text" className="user-button" icon={<UserOutlined />} aria-label={`Account menu for ${user.username}`}>
@@ -58,7 +66,7 @@ export function AppHeader() {
         </div>
       </div>
 
-      {isAdmin && mobile && (
+      {canUpload && mobile && (
         <FloatButton
           type="primary"
           icon={<CloudUploadOutlined />}
@@ -68,7 +76,7 @@ export function AppHeader() {
           style={{ insetInlineEnd: 20, insetBlockEnd: 24, width: 52, height: 52 }}
         />
       )}
-      {isAdmin && <UploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} />}
+      {canUpload && <UploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} />}
     </header>
   );
 }

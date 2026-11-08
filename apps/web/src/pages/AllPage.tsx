@@ -11,7 +11,9 @@ import { emptyStates, GalleryView } from '../components/GalleryView';
 let lastAdminStatus: AdminStatus = 'active';
 
 export function AllPage() {
-  const { isAdmin } = useAuth();
+  const { can } = useAuth();
+  const seesTrash = can('photos.delete');
+  const canExport = can('photos.export');
   const { message } = App.useApp();
   const [status, setStatus] = useState<AdminStatus>(lastAdminStatus);
   const [exporting, setExporting] = useState(false);
@@ -28,7 +30,24 @@ export function AllPage() {
     }
   };
 
-  if (!isAdmin) return <GalleryView scope="all" empty={emptyStates.all} />;
+  if (!seesTrash && !canExport) return <GalleryView scope="all" empty={emptyStates.all} />;
+
+  const exportButton = canExport && (
+    <Tooltip title="CSV with original file names, sizes, camera data and favorite/save counts for the photos in this filter">
+      <Button icon={<FileExcelOutlined aria-hidden />} onClick={exportCsv} loading={exporting}>
+        Export CSV
+      </Button>
+    </Tooltip>
+  );
+
+  // Export only (no trash access): the normal gallery plus the export button.
+  if (!seesTrash)
+    return (
+      <>
+        <div className="admin-filter">{exportButton}</div>
+        <GalleryView scope="all" empty={emptyStates.all} />
+      </>
+    );
 
   return (
     <>
@@ -47,11 +66,7 @@ export function AllPage() {
           ]}
           aria-label="Photo status filter"
         />
-        <Tooltip title="CSV with original file names, sizes, camera data and favorite/save counts for the photos in this filter">
-          <Button icon={<FileExcelOutlined aria-hidden />} onClick={exportCsv} loading={exporting}>
-            Export CSV
-          </Button>
-        </Tooltip>
+        {exportButton}
       </div>
       <GalleryView
         key={status}
