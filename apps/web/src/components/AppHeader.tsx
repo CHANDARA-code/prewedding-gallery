@@ -1,0 +1,74 @@
+import { Button, Dropdown, FloatButton, Tag, Tooltip } from 'antd';
+import { CloudUploadOutlined, LoginOutlined, LogoutOutlined, UserOutlined } from '@ant-design/icons';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useAuth } from '../auth/AuthContext';
+import { useIsMobile } from '../hooks/useColumns';
+import { UploadModal } from './UploadModal';
+
+export function AppHeader() {
+  const { user, isAdmin, ready, openLogin, logout } = useAuth();
+  const mobile = useIsMobile();
+  const [uploadOpen, setUploadOpen] = useState(false);
+
+  return (
+    <header className="app-header">
+      <div className="app-header-inner">
+        <Link to="/" className="brand" aria-label="Pre-Wedding View home">
+          <span className="brand-mark" aria-hidden>
+            ♡
+          </span>
+          <span className="brand-name">Pre-Wedding View</span>
+        </Link>
+
+        <div className="header-actions">
+          {isAdmin && !mobile && (
+            <Button icon={<CloudUploadOutlined aria-hidden />} onClick={() => setUploadOpen(true)}>
+              Upload
+            </Button>
+          )}
+
+          {user ? (
+            <Dropdown
+              trigger={['click']}
+              placement="bottomRight"
+              menu={{
+                items: [{ key: 'logout', icon: <LogoutOutlined />, label: 'Log out' }],
+                onClick: ({ key }) => key === 'logout' && logout(),
+              }}
+            >
+              <Button type="text" className="user-button" icon={<UserOutlined />} aria-label={`Account menu for ${user.username}`}>
+                {!mobile && <span className="user-name">{user.username}</span>}
+                {isAdmin && (
+                  <Tag color="magenta" className="admin-badge">
+                    Admin
+                  </Tag>
+                )}
+              </Button>
+            </Dropdown>
+          ) : mobile ? (
+            <Tooltip title="Log in">
+              <Button shape="circle" size="large" icon={<LoginOutlined />} aria-label="Log in" onClick={() => openLogin()} disabled={!ready} />
+            </Tooltip>
+          ) : (
+            <Button type="primary" icon={<LoginOutlined aria-hidden />} onClick={() => openLogin()} disabled={!ready}>
+              Log in
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {isAdmin && mobile && (
+        <FloatButton
+          type="primary"
+          icon={<CloudUploadOutlined />}
+          tooltip="Upload photos"
+          aria-label="Upload photos"
+          onClick={() => setUploadOpen(true)}
+          style={{ insetInlineEnd: 20, insetBlockEnd: 24, width: 52, height: 52 }}
+        />
+      )}
+      {isAdmin && <UploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} />}
+    </header>
+  );
+}
