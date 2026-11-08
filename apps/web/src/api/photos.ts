@@ -13,8 +13,10 @@ import type { AdminStatus, Photo, PhotoPage, Scope } from './types';
 
 type Pages = InfiniteData<PhotoPage, string | undefined>;
 
-export function endpointFor(scope: Scope): string {
+export function endpointFor(scope: Scope, album?: string): string {
   switch (scope) {
+    case 'album':
+      return `/albums/${encodeURIComponent(album ?? '')}/photos`;
     case 'favorite':
       return '/me/favorites';
     case 'save':
@@ -26,15 +28,16 @@ export function endpointFor(scope: Scope): string {
   }
 }
 
-export const photosKey = (scope: Scope, status?: AdminStatus): QueryKey =>
-  scope === 'admin' ? ['photos', scope, status ?? 'active'] : ['photos', scope];
+export const photosKey = (scope: Scope, status?: AdminStatus, album?: string): QueryKey =>
+  scope === 'admin' ? ['photos', scope, status ?? 'active'] : scope === 'album' ? ['photos', scope, album] : ['photos', scope];
 
-export function usePhotoList(scope: Scope, status?: AdminStatus, enabled = true) {
+/** `album` is the album's slug (scope 'album' only). */
+export function usePhotoList(scope: Scope, status?: AdminStatus, enabled = true, album?: string) {
   return useInfiniteQuery({
-    queryKey: photosKey(scope, status),
+    queryKey: photosKey(scope, status, album),
     queryFn: ({ pageParam, signal }) =>
       api
-        .get<PhotoPage>(endpointFor(scope), {
+        .get<PhotoPage>(endpointFor(scope, album), {
           params: { limit: PAGE_SIZE, cursor: pageParam, status: scope === 'admin' ? status : undefined },
           signal,
         })
@@ -155,6 +158,7 @@ export function useSoftDelete() {
         return null;
       });
       qc.invalidateQueries({ queryKey: ['photos', 'admin', 'deleted'], refetchType: 'none' });
+      qc.invalidateQueries({ queryKey: ['albums'] }); // counts and covers
     },
   });
 }
@@ -170,10 +174,11 @@ export function useRestore() {
         return null;
       });
       // It reappears in lists it used to be in: refetch those lazily.
-      for (const scope of ['all', 'favorite', 'save'] as const) {
+      for (const scope of ['all', 'favorite', 'save', 'album'] as const) {
         qc.invalidateQueries({ queryKey: ['photos', scope], refetchType: 'none' });
       }
       qc.invalidateQueries({ queryKey: ['photos', 'admin', 'active'], refetchType: 'none' });
+      qc.invalidateQueries({ queryKey: ['albums'] });
     },
   });
 }
@@ -184,6 +189,7 @@ export function useHardDelete() {
     mutationFn: (photo: Photo) => api.delete(`/admin/photos/${photo.id}/permanent`),
     onSuccess: (_res, photo) => {
       updateCachedPhotos(qc, (item) => (item.id === photo.id ? null : item));
+      qc.invalidateQueries({ queryKey: ['albums'] });
     },
   });
 }
@@ -223,10 +229,12 @@ export interface CsvExport {
   collection?: 'all' | 'favorites' | 'saves';
   /** With a collection: only the signed-in user's own. */
   mine?: boolean;
+  /** Only photos in this album (its id). */
+  album?: number;
 }
 
-export async function downloadPhotosCsv({ status = 'all', collection = 'all', mine = false }: CsvExport = {}) {
-  const params = { status, ...(collection !== 'all' && { collection, mine }) };
+export async function downloadPhotosCsv({ status = 'all', collection = 'all', mine = false, album }: CsvExport = {}) {
+  const params = { status, ...(collection !== 'all' && { collection, mine }), ...(album !== undefined && { album }) };
   const res = await api.get<Blob>('/admin/photos/export.csv', { params, responseType: 'blob' });
   const disposition = String(res.headers['content-disposition'] ?? '');
   const name = /filename="([^"]+)"/.exec(disposition)?.[1] ?? `prewedding-photos-${status}.csv`;

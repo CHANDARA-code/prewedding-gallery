@@ -4,6 +4,7 @@ import type { MenuProps } from 'antd';
 import {
   BookFilled,
   BookOutlined,
+  CheckCircleFilled,
   DeleteOutlined,
   EditOutlined,
   ExclamationCircleFilled,
@@ -26,12 +27,15 @@ interface Props {
   height: number;
   /** First row: load eagerly with high fetch priority instead of lazy. */
   priority?: boolean;
-  onOpen: () => void;
+  onOpen: (shift: boolean) => void;
+  /** Select mode: the card is a toggle and the per-photo actions are hidden. */
+  selectMode?: boolean;
+  selected?: boolean;
 }
 
 const stop = (e: MouseEvent) => e.stopPropagation();
 
-function PhotoCardInner({ photo, width, height, priority, onOpen }: Props) {
+function PhotoCardInner({ photo, width, height, priority, onOpen, selectMode, selected }: Props) {
   const { user, can, openLogin } = useAuth();
   const { message } = App.useApp();
   const toggleFavorite = useToggle('favorite');
@@ -60,11 +64,17 @@ function PhotoCardInner({ photo, width, height, priority, onOpen }: Props) {
 
   return (
     <div
-      className={`photo-card${deleted ? ' is-deleted' : ''}`}
+      className={`photo-card${deleted ? ' is-deleted' : ''}${selectMode ? ' is-selectable' : ''}${selected ? ' is-selected' : ''}`}
       style={{ width, height }}
       data-testid="photo-card"
     >
-      <button type="button" className="photo-open" onClick={onOpen} aria-label={`Open ${label}`}>
+      <button
+        type="button"
+        className="photo-open"
+        onClick={(e) => onOpen(e.shiftKey)}
+        aria-label={selectMode ? `Select ${label}` : `Open ${label}`}
+        aria-pressed={selectMode ? Boolean(selected) : undefined}
+      >
         {failed ? (
           <span className="photo-fallback" aria-hidden>
             ♡
@@ -83,6 +93,12 @@ function PhotoCardInner({ photo, width, height, priority, onOpen }: Props) {
         )}
       </button>
 
+      {selectMode && (
+        <span className="select-check" aria-hidden>
+          {selected ? <CheckCircleFilled /> : null}
+        </span>
+      )}
+
       {deleted && (
         <Tag color="default" className="deleted-tag">
           Deleted
@@ -92,7 +108,7 @@ function PhotoCardInner({ photo, width, height, priority, onOpen }: Props) {
       {photo.title && <div className="photo-title">{photo.title}</div>}
 
       <div className="card-actions" onClick={stop}>
-        {!deleted && (
+        {!deleted && !selectMode && (
           <>
             <Tooltip title={photo.isFavorite ? 'Remove from favorites' : 'Favorite'} mouseEnterDelay={0.6}>
               <Button
@@ -118,7 +134,7 @@ function PhotoCardInner({ photo, width, height, priority, onOpen }: Props) {
         )}
       </div>
 
-      {(can('photos.edit') || can('photos.delete') || can('photos.purge')) && (
+      {!selectMode && (can('photos.edit') || can('photos.delete') || can('photos.purge')) && (
         <div className="card-admin" onClick={stop}>
           <AdminMenu photo={photo} />
         </div>

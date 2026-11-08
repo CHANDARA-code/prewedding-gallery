@@ -34,6 +34,7 @@ const SHORT: Record<Permission, string> = {
   'photos.delete': 'Trash & restore',
   'photos.purge': 'Delete forever',
   'photos.export': 'Export CSV',
+  'albums.manage': 'Manage albums',
   'users.manage': 'Manage users',
 };
 

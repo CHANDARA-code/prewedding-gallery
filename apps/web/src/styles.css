@@ -144,6 +144,11 @@ body {
   align-items: center;
   margin-bottom: 14px;
 }
+/* antd renders Dropdown.Button (Export CSV) as a full-width block, which pushed it onto its own row. */
+.admin-filter .ant-dropdown-button.ant-space-compact-block {
+  display: inline-flex;
+  width: auto;
+}
 .center-state {
   min-height: 50vh;
   display: grid;
@@ -676,6 +681,271 @@ body {
   font-size: 22px;
 }
 
+/* ---------- select mode ---------- */
+.photo-card.is-selectable .photo-open {
+  cursor: pointer;
+}
+.photo-card.is-selectable img {
+  transition: transform 0.15s ease;
+}
+.photo-card.is-selected {
+  box-shadow: 0 0 0 3px var(--rose);
+}
+.photo-card.is-selected img {
+  transform: scale(0.92);
+  border-radius: 6px;
+}
+.select-check {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: rgba(30, 18, 24, 0.25);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  display: grid;
+  place-items: center;
+  color: var(--rose);
+  font-size: 26px;
+  pointer-events: none;
+}
+.photo-card.is-selected .select-check {
+  background: #fff;
+}
+.selection-bar {
+  position: fixed;
+  left: 50%;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 40;
+  width: min(760px, calc(100vw - 2 * var(--gutter)));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid var(--line);
+  box-shadow: 0 10px 30px rgba(61, 44, 51, 0.22);
+}
+.selection-count {
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.selection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-inline-start: auto;
+}
+/* The bar sits where the mobile upload button floats. */
+body:has(.selection-bar) .ant-float-btn {
+  display: none;
+}
+body:has(.selection-bar) .content {
+  padding-bottom: 140px;
+}
+
+/* ---------- albums ---------- */
+.album-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 18px;
+}
+.album-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--ink);
+  text-decoration: none;
+  border-radius: 12px;
+}
+.album-card:focus-visible {
+  outline: 3px solid var(--rose);
+  outline-offset: 3px;
+}
+.album-card.is-skeleton {
+  aspect-ratio: 4 / 3;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #f1e6e3 25%, #f8efed 37%, #f1e6e3 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+}
+.album-cover {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f4e9ec, #ece2df);
+  box-shadow: 0 1px 2px rgba(61, 44, 51, 0.06), 6px 6px 0 -2px var(--card-bg);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+.album-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.album-cover-empty {
+  font-size: 40px;
+  color: #c9a9b4;
+}
+.album-card.is-hidden .album-cover img {
+  opacity: 0.6;
+}
+@media (hover: hover) {
+  .album-card:hover .album-cover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(61, 44, 51, 0.16), 6px 6px 0 -2px var(--card-bg);
+  }
+  .album-card:hover .album-name {
+    color: var(--rose);
+  }
+}
+.album-meta {
+  display: flex;
+  flex-direction: column;
+  padding: 0 2px;
+  min-width: 0;
+}
+.album-name {
+  font-size: 21px;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.album-count {
+  color: var(--muted);
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.album-hidden-tag.ant-tag {
+  margin: 0 0 0 4px;
+  background: var(--rose-soft);
+  color: var(--rose);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  vertical-align: middle;
+}
+.album-header {
+  text-align: center;
+  margin: 2px auto 14px;
+  max-width: 720px;
+}
+.album-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.album-back:hover {
+  color: var(--rose);
+}
+.album-title {
+  margin: 0;
+  font-size: clamp(28px, 5vw, 40px);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.album-description {
+  margin: 6px 0 0;
+  color: var(--muted);
+  white-space: pre-line;
+}
+.album-header .album-count {
+  margin: 6px 0 0;
+}
+
+/* Album picker modal */
+.album-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.album-picker-new {
+  display: flex;
+  gap: 8px;
+}
+.album-picker-state {
+  padding: 24px 0;
+  text-align: center;
+}
+.album-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: min(50vh, 420px);
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.album-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+}
+.album-picker-row + .album-picker-row {
+  border-top: 1px solid var(--line);
+}
+.album-picker-thumb {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: var(--card-bg);
+  color: #b89aa5;
+  font-size: 20px;
+}
+.album-picker-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.album-picker-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.album-picker-name > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.album-picker-name small {
+  color: var(--muted);
+}
+
+/* Album links in the viewer's info panel */
+.info-albums {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+.info-album-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 /* ---------- responsive ---------- */
 @media (max-width: 575.98px) {
   :root {
@@ -704,6 +974,26 @@ body {
   }
   .action-btn.ant-btn {
     font-size: 16px;
+  }
+  .tab-label {
+    gap: 4px;
+  }
+  .album-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .album-name {
+    font-size: 18px;
+  }
+  .selection-bar {
+    padding: 8px 10px;
+  }
+  .selection-actions {
+    width: 100%;
+    margin-inline-start: 0;
+  }
+  .selection-actions .ant-btn {
+    flex: 1;
   }
 }
 @media (min-width: 576px) and (max-width: 991.98px) {

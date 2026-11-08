@@ -1,4 +1,4 @@
-import { ReactNode, useCallback, useMemo, useRef } from 'react';
+import { ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button, Divider, Empty, Result } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
@@ -10,16 +10,24 @@ import { supportsIntersectionObserver, useInfiniteSentinel } from '../hooks/useI
 import { useScrollMemory } from '../hooks/useScrollMemory';
 import { GridSkeleton, PhotoGrid } from './PhotoGrid';
 import { PhotoViewer } from './PhotoViewer';
+import { SelectionBar } from './SelectionBar';
+import type { Selection } from '../hooks/useSelection';
 
 interface Props {
   scope: Scope;
   status?: AdminStatus;
+  /** Album slug (scope 'album'). */
+  album?: string;
   empty: ReactNode;
+  /** While `selection.active`, tapping a photo selects it (shift-click selects a range). */
+  selection?: Selection;
+  /** Buttons for the selection bar, given the selected ids in grid order. */
+  selectionActions?: (ids: number[]) => ReactNode;
 }
 
-export function GalleryView({ scope, status, empty }: Props) {
+export function GalleryView({ scope, status, album, empty, selection, selectionActions }: Props) {
   const columns = useColumns();
-  const query = usePhotoList(scope, status);
+  const query = usePhotoList(scope, status, true, album);
   const { data, isPending, isError, error, refetch, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } =
     query;
   const photos = useMemo(() => flattenPages(data), [data]);
@@ -40,7 +48,7 @@ export function GalleryView({ scope, status, empty }: Props) {
   });
   const ioSupported = supportsIntersectionObserver();
 
-  useScrollMemory(`${scope}:${status ?? ''}`, photos.length > 0);
+  useScrollMemory(`${scope}:${status ?? album ?? ''}`, photos.length > 0);
 
   const setPhotoParam = useCallback(
     (id: number | null, replace: boolean) =>
@@ -73,6 +81,25 @@ export function GalleryView({ scope, status, empty }: Props) {
     pushedViewer.current = false;
   }, [navigate, setPhotoParam]);
 
+  const selecting = Boolean(selection?.active);
+  const anchor = useRef<number | null>(null);
+  useEffect(() => {
+    if (!selecting) anchor.current = null;
+  }, [selecting]);
+  const onCard = useCallback(
+    (index: number, shift: boolean) => {
+      if (!selection?.active) return openAt(index);
+      const photo = photos[index];
+      if (!photo) return;
+      if (shift && anchor.current !== null) {
+        const [a, b] = [Math.min(anchor.current, index), Math.max(anchor.current, index)];
+        selection.add(photos.slice(a, b + 1).map((p) => p.id));
+      } else selection.toggle(photo.id);
+      anchor.current = index;
+    },
+    [selection, photos, openAt],
+  );
+
   const viewer = viewerId !== null && (
     <PhotoViewer
       photos={photos}
@@ -90,6 +117,11 @@ export function GalleryView({ scope, status, empty }: Props) {
     <>
       {renderContent()}
       {viewer}
+      {selection?.active && (
+        <SelectionBar selection={selection} photos={photos}>
+          {selectionActions?.(photos.filter((p) => selection.ids.has(p.id)).map((p) => p.id))}
+        </SelectionBar>
+      )}
     </>
   );
 
@@ -116,7 +148,7 @@ export function GalleryView({ scope, status, empty }: Props) {
 
     return (
       <>
-        <PhotoGrid photos={photos} columns={columns} onOpen={openAt} />
+        <PhotoGrid photos={photos} columns={columns} onOpen={onCard} selected={selecting ? selection!.ids : undefined} />
 
         {isFetchingNextPage && <GridSkeleton columns={columns} rows={1} />}
 
@@ -153,4 +185,5 @@ export const emptyStates = {
   favorite: <Empty description="No favorites yet. Tap the heart on any photo." />,
   save: <Empty description="Nothing saved yet. Tap the bookmark on any photo." />,
   trash: <Empty description="Trash is empty." />,
+  album: <Empty description="No photos in this album yet." />,
 };

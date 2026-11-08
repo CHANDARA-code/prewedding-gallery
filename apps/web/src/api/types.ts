@@ -1,7 +1,14 @@
 export type Role = 'user' | 'admin';
 
 /** Actions beyond browsing. Admins have all of them; a user only the ones granted. */
-export type Permission = 'photos.upload' | 'photos.edit' | 'photos.delete' | 'photos.purge' | 'photos.export' | 'users.manage';
+export type Permission =
+  | 'photos.upload'
+  | 'photos.edit'
+  | 'photos.delete'
+  | 'photos.purge'
+  | 'photos.export'
+  | 'albums.manage'
+  | 'users.manage';
 
 export interface User {
   id: number;
@@ -62,6 +69,27 @@ export interface Photo {
   /** Admin detail only. */
   originalName?: string | null;
   uploadedBy?: number;
+  /** Detail only: the albums this photo is in. */
+  albums?: AlbumRef[];
+}
+
+export interface AlbumRef {
+  id: number;
+  slug: string;
+  name: string;
+}
+
+export interface Album extends AlbumRef {
+  description: string | null;
+  /** Only album managers ever see hidden albums. */
+  hidden: boolean;
+  photoCount: number;
+  /** The chosen cover, else the newest photo in the album. */
+  cover: { id: number; thumbUrl: string; previewUrl: string; width: number; height: number } | null;
+  /** Explicitly chosen cover (null = automatic). */
+  coverPhotoId: number | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface PhotoExif {
@@ -91,7 +119,7 @@ export interface LoginResponse {
   user: User;
 }
 
-export type Scope = 'all' | 'favorite' | 'save' | 'admin';
+export type Scope = 'all' | 'favorite' | 'save' | 'admin' | 'album';
 export type AdminStatus = 'active' | 'deleted' | 'all';
 
 export interface ApiError {

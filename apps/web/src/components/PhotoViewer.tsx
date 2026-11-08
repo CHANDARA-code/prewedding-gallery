@@ -6,6 +6,7 @@ import {
   BookOutlined,
   CloseOutlined,
   DownloadOutlined,
+  FolderAddOutlined,
   FullscreenExitOutlined,
   FullscreenOutlined,
   HeartFilled,
@@ -29,6 +30,7 @@ import { useAuth } from '../auth/AuthContext';
 import { useElementSize } from '../hooks/useElementSize';
 import { ShareSheet } from '../share/ShareSheet';
 import { PhotoInfo } from './PhotoInfo';
+import { AlbumPickerModal } from './AlbumPickerModal';
 
 interface Props {
   photos: Photo[];
@@ -101,6 +103,7 @@ export function PhotoViewer({ photos, photoId, onNavigate, onClose, hasNextPage,
   const [chrome, setChrome] = useState(true);
   const [playing, setPlaying] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [albumsOpen, setAlbumsOpen] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
 
   const rootRef = useRef<HTMLDivElement>(null);
@@ -262,7 +265,7 @@ export function PhotoViewer({ photos, photoId, onNavigate, onClose, hasNextPage,
   /* ---------- keyboard ---------- */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (shareOpen || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (shareOpen || albumsOpen || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
       const keys: Record<string, () => void> = {
@@ -287,7 +290,7 @@ export function PhotoViewer({ photos, photoId, onNavigate, onClose, hasNextPage,
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [go, onClose, zoomAt, view.scale, toggleInfo, toggleFullscreen, download, shareOpen]);
+  }, [go, onClose, zoomAt, view.scale, toggleInfo, toggleFullscreen, download, shareOpen, albumsOpen]);
 
   /* ---------- pointer gestures: pan, pinch, swipe, double-tap ---------- */
   const pointers = useRef(new Map<number, { x: number; y: number }>());
@@ -426,6 +429,19 @@ export function PhotoViewer({ photos, photoId, onNavigate, onClose, hasNextPage,
               <Tooltip title="Share (S)">
                 <Button type="text" className="viewer-btn" aria-label="Share" icon={<ShareAltOutlined />} onClick={() => setShareOpen(true)} />
               </Tooltip>
+              {can('albums.manage') && (
+                <Tooltip title="Add to album">
+                  <Button
+                    type="text"
+                    className="viewer-btn"
+                    aria-label="Albums for this photo"
+                    icon={<FolderAddOutlined />}
+                    onClick={() => setAlbumsOpen(true)}
+                    loading={photo.albums === undefined && detail.isFetching}
+                    disabled={photo.albums === undefined}
+                  />
+                </Tooltip>
+              )}
             </>
           )}
           <span className="viewer-desktop-only">
@@ -554,6 +570,9 @@ export function PhotoViewer({ photos, photoId, onNavigate, onClose, hasNextPage,
       )}
 
       {shareOpen && <ShareSheet photo={photo ?? null} onClose={() => setShareOpen(false)} />}
+      {albumsOpen && photo && (
+        <AlbumPickerModal photoIds={[photo.id]} memberOf={photo.albums?.map((a) => a.id) ?? []} onClose={() => setAlbumsOpen(false)} />
+      )}
     </div>
   );
 

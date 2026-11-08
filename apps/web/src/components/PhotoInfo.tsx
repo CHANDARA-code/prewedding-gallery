@@ -1,5 +1,6 @@
 import { App, Button, Descriptions, Skeleton, Tooltip, Typography } from 'antd';
-import { CopyOutlined, ExportOutlined } from '@ant-design/icons';
+import { CopyOutlined, ExportOutlined, FolderOutlined } from '@ant-design/icons';
+import { Link } from 'react-router-dom';
 import type { Photo, PhotoExif } from '../api/types';
 import { assetUrl } from '../config';
 import { copyText, shareUrl } from '../share/share';
@@ -72,6 +73,21 @@ export function PhotoInfo({ photo, loading, isAdmin }: Props) {
     x?.exposureBias ? { key: 'ev', label: 'Exp. bias', children: `${x.exposureBias > 0 ? '+' : ''}${x.exposureBias.toFixed(1)} EV` } : null,
     x?.flash !== undefined && { key: 'flash', label: 'Flash', children: x.flash ? 'Fired' : 'Off' },
     formatTakenAt(x?.takenAt) && { key: 'taken', label: 'Taken', children: formatTakenAt(x?.takenAt) },
+    photo.albums?.length
+      ? {
+          key: 'albums',
+          label: photo.albums.length === 1 ? 'Album' : 'Albums',
+          children: (
+            <span className="info-albums">
+              {photo.albums.map((a) => (
+                <Link key={a.id} to={`/albums/${a.slug}`} className="info-album-link">
+                  <FolderOutlined aria-hidden /> {a.name}
+                </Link>
+              ))}
+            </span>
+          ),
+        }
+      : null,
     { key: 'uploaded', label: 'Added', children: new Date(photo.createdAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) },
     isAdmin && {
       key: 'original',

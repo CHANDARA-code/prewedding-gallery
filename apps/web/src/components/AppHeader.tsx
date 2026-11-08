@@ -1,6 +1,7 @@
 import { Button, Dropdown, FloatButton, Tag, Tooltip } from 'antd';
 import { CloudUploadOutlined, LoginOutlined, LogoutOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons';
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { useIsMobile } from '../hooks/useColumns';
@@ -66,16 +67,20 @@ export function AppHeader() {
         </div>
       </div>
 
-      {canUpload && mobile && (
-        <FloatButton
-          type="primary"
-          icon={<CloudUploadOutlined />}
-          tooltip="Upload photos"
-          aria-label="Upload photos"
-          onClick={() => setUploadOpen(true)}
-          style={{ insetInlineEnd: 20, insetBlockEnd: 24, width: 52, height: 52 }}
-        />
-      )}
+      {/* Portalled: the header's backdrop-filter would otherwise pin this "fixed" button to the header. */}
+      {canUpload &&
+        mobile &&
+        createPortal(
+          <FloatButton
+            type="primary"
+            icon={<CloudUploadOutlined />}
+            tooltip="Upload photos"
+            aria-label="Upload photos"
+            onClick={() => setUploadOpen(true)}
+            style={{ insetInlineEnd: 20, insetBlockEnd: 24, width: 52, height: 52 }}
+          />,
+          document.body,
+        )}
       {canUpload && <UploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} />}
     </header>
   );

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Segmented } from 'antd';
 import { ExportCsvButton } from '../components/ExportCsvButton';
+import { useAlbumSelect } from '../components/AlbumSelectTools';
 import type { AdminStatus } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { emptyStates, GalleryView } from '../components/GalleryView';
@@ -13,32 +14,12 @@ export function AllPage() {
   const seesTrash = can('photos.delete');
   const canExport = can('photos.export');
   const [status, setStatus] = useState<AdminStatus>(lastAdminStatus);
-
-  if (!seesTrash && !canExport) return <GalleryView scope="all" empty={emptyStates.all} />;
+  const { selection, selectButton, actions } = useAlbumSelect();
 
   const statusLabel = { active: 'Active photos', deleted: 'Photos in trash', all: 'All photos incl. trash' }[status];
-  const exportButton = (
-    <ExportCsvButton
-      main={{ key: 'filter', label: `${statusLabel} (this filter)`, status }}
-      more={[
-        { key: 'fav', label: 'Only favorited photos (who favorited)', collection: 'favorites' },
-        { key: 'save', label: 'Only saved photos (who saved)', collection: 'saves' },
-      ]}
-    />
-  );
-
-  // Export only (no trash access): the normal gallery plus the export button.
-  if (!seesTrash)
-    return (
-      <>
-        <div className="admin-filter">{exportButton}</div>
-        <GalleryView scope="all" empty={emptyStates.all} />
-      </>
-    );
-
-  return (
-    <>
-      <div className="admin-filter">
+  const toolbar = (seesTrash || canExport || selection) && (
+    <div className="admin-filter">
+      {seesTrash && (
         <Segmented<AdminStatus>
           value={status}
           onChange={(v) => {
@@ -53,14 +34,35 @@ export function AllPage() {
           ]}
           aria-label="Photo status filter"
         />
-        {exportButton}
-      </div>
-      <GalleryView
-        key={status}
-        scope="admin"
-        status={status}
-        empty={status === 'deleted' ? emptyStates.trash : emptyStates.all}
-      />
+      )}
+      {canExport && (
+        <ExportCsvButton
+          main={{ key: 'filter', label: `${statusLabel} (this filter)`, status }}
+          more={[
+            { key: 'fav', label: 'Only favorited photos (who favorited)', collection: 'favorites' },
+            { key: 'save', label: 'Only saved photos (who saved)', collection: 'saves' },
+          ]}
+        />
+      )}
+      {selectButton}
+    </div>
+  );
+
+  return (
+    <>
+      {toolbar}
+      {seesTrash ? (
+        <GalleryView
+          key={status}
+          scope="admin"
+          status={status}
+          empty={status === 'deleted' ? emptyStates.trash : emptyStates.all}
+          selection={selection}
+          selectionActions={actions}
+        />
+      ) : (
+        <GalleryView scope="all" empty={emptyStates.all} selection={selection} selectionActions={actions} />
+      )}
     </>
   );
 }

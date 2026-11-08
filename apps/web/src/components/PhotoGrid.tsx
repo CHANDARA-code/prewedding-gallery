@@ -7,7 +7,10 @@ import { PhotoCard } from './PhotoCard';
 interface Props {
   photos: Photo[];
   columns: number;
-  onOpen: (index: number) => void;
+  /** `shift`: shift-click (range select in select mode). */
+  onOpen: (index: number, shift: boolean) => void;
+  /** Select mode: cards toggle selection instead of opening the viewer. */
+  selected?: ReadonlySet<number>;
 }
 
 const FALLBACK_ASPECT = 1.5;
@@ -39,7 +42,7 @@ export function layoutRows(photos: Photo[], columns: number, width: number, gap:
   return rows;
 }
 
-export function PhotoGrid({ photos, columns, onOpen }: Props) {
+export function PhotoGrid({ photos, columns, onOpen, selected }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const width = useElementWidth(containerRef);
   const gap = columns <= 2 ? 6 : 10;
@@ -84,7 +87,9 @@ export function PhotoGrid({ photos, columns, onOpen }: Props) {
                     width={row.widths[i]}
                     height={row.height}
                     priority={v.index === 0}
-                    onOpen={() => onOpen(row.start + i)}
+                    onOpen={(shift) => onOpen(row.start + i, shift)}
+                    selectMode={selected !== undefined}
+                    selected={selected?.has(photo.id)}
                   />
                 </div>
               ))}
