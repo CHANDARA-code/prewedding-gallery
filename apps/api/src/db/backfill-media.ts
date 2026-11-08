@@ -1,7 +1,7 @@
 /**
  * `pnpm --filter api db:backfill` (or `node dist/db/backfill-media.js` in production) fills the
  * columns added in migration 0001 for photos stored before it:
- *   - original_name from data/import-manifest.json (source path -> photo id),
+ *   - original_name and source_archive (A.zip / B.zip) from data/import-manifest.json (source path -> photo id),
  *   - preview_filename: renders the 2048px WebP viewer image,
  *   - exif: camera/lens/exposure fields read from the original.
  * Resumable and safe to run while the API is serving: only rows with preview_filename IS NULL are
@@ -34,12 +34,15 @@ async function main() {
   let named = 0;
   if (existsSync(manifestPath)) {
     const manifest: Record<string, number> = JSON.parse(readFileSync(manifestPath, 'utf8'));
-    const stmt = sqlite.prepare('UPDATE photos SET original_name = ? WHERE id = ? AND original_name IS NULL');
+    const stmt = sqlite.prepare(
+      'UPDATE photos SET original_name = coalesce(original_name, ?), source_archive = coalesce(source_archive, ?) WHERE id = ? AND (original_name IS NULL OR source_archive IS NULL)',
+    );
     sqlite.transaction(() => {
-      for (const [path, id] of Object.entries(manifest)) named += stmt.run(basename(path), id).changes;
+      // Keys look like photos/B/KSNT1861.jpg: the folder is the zip it was extracted from.
+      for (const [path, id] of Object.entries(manifest)) named += stmt.run(basename(path), `${basename(dirname(path))}.zip`, id).changes;
     })();
   }
-  console.log(`original_name set on ${named} photos from the import manifest`);
+  console.log(`original_name/source_archive set on ${named} photos from the import manifest`);
 
   // 2. Previews + EXIF.
   const todo = db

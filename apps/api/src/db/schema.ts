@@ -26,6 +26,7 @@ export const photos = sqliteTable(
     // 2048px WebP shown in the viewer (orientation + rotation applied). NULL until backfilled.
     previewFilename: text('preview_filename'),
     originalName: text('original_name'), // the uploader's file name, e.g. KSNT0990.jpg
+    sourceArchive: text('source_archive'), // zip the photo was imported from, e.g. A.zip (NULL = web upload)
     rotation: integer('rotation').notNull().default(0), // admin rotation on top of EXIF: 0/90/180/270
     exif: text('exif'), // JSON: camera/lens/exposure fields only (no GPS, no serial numbers)
     mimeType: text('mime_type').notNull(),

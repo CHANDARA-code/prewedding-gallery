@@ -93,7 +93,7 @@ async function main() {
       batch.forEach((file, idx) => {
         const r = results[idx];
         if (!r) return;
-        const id = tx.insert(photos).values({ ...r, uploadedBy: admin.id }).returning({ id: photos.id }).get().id;
+        const id = tx.insert(photos).values({ ...r, sourceArchive: `${basename(dirname(file))}.zip`, uploadedBy: admin.id }).returning({ id: photos.id }).get().id;
         manifest[keyOf(file)] = id;
         done++;
         bytes += r.sizeBytes;

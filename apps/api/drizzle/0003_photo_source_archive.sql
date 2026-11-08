@@ -1,0 +1,1 @@
+ALTER TABLE `photos` ADD `source_archive` text;
