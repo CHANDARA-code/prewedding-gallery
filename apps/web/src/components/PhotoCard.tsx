@@ -10,10 +10,12 @@ import {
   HeartFilled,
   HeartOutlined,
   MoreOutlined,
+  RotateLeftOutlined,
+  RotateRightOutlined,
   UndoOutlined,
 } from '@ant-design/icons';
 import type { Photo } from '../api/types';
-import { useHardDelete, useRestore, useSoftDelete, useToggle, useUpdatePhoto } from '../api/photos';
+import { useHardDelete, useRestore, useRotate, useSoftDelete, useToggle, useUpdatePhoto } from '../api/photos';
 import { errorMessage } from '../api/client';
 import { assetUrl } from '../config';
 import { useAuth } from '../auth/AuthContext';
@@ -130,6 +132,7 @@ function AdminMenu({ photo }: { photo: Photo }) {
   const softDelete = useSoftDelete();
   const restore = useRestore();
   const hardDelete = useHardDelete();
+  const rotate = useRotate();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const deleted = Boolean(photo.deletedAt);
@@ -149,20 +152,36 @@ function AdminMenu({ photo }: { photo: Photo }) {
           .catch((err) => message.error(errorMessage(err, "Couldn't delete the photo"))),
     });
 
+  const rotateItems: MenuProps['items'] = [
+    { key: 'rot-left', icon: <RotateLeftOutlined />, label: 'Rotate left' },
+    { key: 'rot-right', icon: <RotateRightOutlined />, label: 'Rotate right' },
+    { key: 'rot-180', icon: <RotateRightOutlined />, label: 'Rotate 180°' },
+  ];
   const items: MenuProps['items'] = deleted
     ? [
         { key: 'restore', icon: <UndoOutlined />, label: 'Restore' },
+        ...rotateItems,
         { type: 'divider' },
         { key: 'hard', icon: <DeleteOutlined />, label: 'Delete permanently', danger: true },
       ]
     : [
         { key: 'edit', icon: <EditOutlined />, label: 'Edit details' },
+        ...rotateItems,
         { key: 'soft', icon: <DeleteOutlined />, label: 'Delete' },
         { type: 'divider' },
         { key: 'hard', icon: <DeleteOutlined />, label: 'Delete permanently', danger: true },
       ];
 
   const onMenu: MenuProps['onClick'] = ({ key }) => {
+    if (key.startsWith('rot-')) {
+      const degrees = key === 'rot-left' ? -90 : key === 'rot-right' ? 90 : 180;
+      const done = message.loading('Rotating…', 0);
+      rotate
+        .mutateAsync({ id: photo.id, degrees })
+        .then((p) => message.success(`Rotated to ${p.rotation}° in every tab`))
+        .catch((err) => message.error(errorMessage(err, "Couldn't rotate the photo")))
+        .finally(done);
+    }
     if (key === 'edit') setEditOpen(true);
     if (key === 'soft') setConfirmOpen(true);
     if (key === 'hard') confirmHardDelete();
