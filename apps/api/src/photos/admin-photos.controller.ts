@@ -5,6 +5,7 @@ import {
   Delete,
   Get,
   HttpCode,
+  NotFoundException,
   Param,
   ParseIntPipe,
   Patch,
@@ -32,6 +33,8 @@ import type { Request, Response } from 'express';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Inject } from '@nestjs/common';
 import { DRIZZLE } from '../db/db.module';
+import { albums } from '../db/schema';
+import { eq } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import { APP_CONFIG, AppConfig } from '../config/env';
 import { AppEvents } from '../alerts/events';
@@ -65,24 +68,28 @@ export class AdminPhotosController {
   @ApiOperation({
     summary: 'Export photos as CSV',
     description:
-      'One row per photo: source zip, original file name, detail link, favorite/save counts and who favorited/saved it, then title, caption, size, dimensions, camera EXIF, uploader and dates. `collection=favorites|saves` keeps only photos someone favorited/saved (`mine=true`: only yours). UTF-8 with BOM (opens correctly in Excel).',
+      'One row per photo: source zip, original file name, detail link, favorite/save counts and who favorited/saved it, then title, caption, size, dimensions, camera EXIF, uploader and dates. `collection=favorites|saves` keeps only photos someone favorited/saved (`mine=true`: only yours); `album=<id>` keeps only the photos in that album. The `albums` column lists every album a photo is in. UTF-8 with BOM (opens correctly in Excel).',
   })
   @ApiOkResponse({ description: 'text/csv attachment', content: { 'text/csv': { schema: { type: 'string' } } } })
   exportCsv(@Query() q: ExportQueryDto, @CurrentUser() user: AuthUser, @Req() req: Request, @Res() res: Response) {
+    const album = q.album ? this.db.select({ slug: albums.slug, name: albums.name }).from(albums).where(eq(albums.id, q.album)).get() : undefined;
+    if (q.album && !album) throw new NotFoundException('Album not found');
     const publicUrl = this.config.publicUrl ?? `${req.protocol}://${req.get('host')}`;
     const { csv, rows } = buildPhotosCsv(this.db, {
       status: q.status,
       collection: q.collection,
       mineUserId: q.collection !== 'all' && q.mine ? user.id : undefined,
+      albumId: q.album,
       publicUrl,
     });
     const date = new Date().toISOString().slice(0, 10);
-    const what = q.collection === 'all' ? `photos-${q.status}` : `${q.mine ? `${user.username}-` : ''}${q.collection}`;
+    const base = q.collection === 'all' ? `photos-${q.status}` : `${q.mine ? `${user.username}-` : ''}${q.collection}`;
+    const what = album ? `album-${album.slug}${q.collection === 'all' ? '' : `-${base}`}` : base;
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="prewedding-${what}-${date}.csv"`);
     res.send(csv);
-    this.events.emit(AppEvents.PhotosExported, { actor: user, rows, status: q.collection === 'all' ? q.status : `${q.mine ? 'my ' : ''}${q.collection}` });
+    this.events.emit(AppEvents.PhotosExported, { actor: user, rows, status: `${q.collection === 'all' ? q.status : `${q.mine ? 'my ' : ''}${q.collection}`}${album ? ` in album ${album.name}` : ''}` });
   }
 
   @Get()

@@ -13,6 +13,7 @@ export const AppEvents = {
   PhotoRestored: 'photo.restored',
   PhotoHardDeleted: 'photo.hard_deleted',
   UserChanged: 'user.changed',
+  AlbumChanged: 'album.changed',
   FavoriteAdded: 'favorite.added',
   FavoriteRemoved: 'favorite.removed',
   SaveAdded: 'save.added',
@@ -54,6 +55,11 @@ export interface PhotosExportedEvent {
 export interface UserChangedEvent {
   actor: Actor;
   target: string;
+  change: string;
+}
+export interface AlbumChangedEvent {
+  actor: Actor;
+  album: string;
   change: string;
 }
 export interface ErrorEvent {

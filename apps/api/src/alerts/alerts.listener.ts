@@ -4,6 +4,7 @@ import { AlertsService } from './alerts.service';
 import { escapeHtml as e } from './telegram.client';
 import {
   Actor,
+  AlbumChangedEvent,
   AppEvents,
   ErrorEvent,
   LoginEvent,
@@ -76,6 +77,11 @@ export class AlertsListener {
   @OnEvent(AppEvents.UserChanged)
   onUserChanged(p: UserChangedEvent) {
     this.alerts.notify('admin', `👤 ${who(p.actor)} · user <b>${e(p.target)}</b>: ${e(p.change)}`);
+  }
+
+  @OnEvent(AppEvents.AlbumChanged)
+  onAlbumChanged(p: AlbumChangedEvent) {
+    this.alerts.notify('admin', `🗂️ ${who(p.actor)} · album <b>${e(p.album)}</b>: ${e(p.change)}`);
   }
 
   @OnEvent(AppEvents.PhotosExported)

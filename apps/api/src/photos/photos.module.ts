@@ -10,10 +10,12 @@ import { PhotosRepository } from './photos.repository';
 import { StorageService } from './storage.service';
 import { PhotoCacheService } from './photo-cache.service';
 import { StorageModule } from './storage.module';
+import { AlbumsModule } from '../albums/albums.module';
 
 @Module({
   imports: [
     StorageModule,
+    AlbumsModule,
     MulterModule.registerAsync({
       imports: [StorageModule],
       inject: [APP_CONFIG, StorageService],

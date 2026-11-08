@@ -28,6 +28,13 @@ export class PhotoDto {
   @ApiPropertyOptional({ example: 2, description: 'Admin detail only.' }) uploadedBy?: number;
   @ApiPropertyOptional({ example: 'KSNT0990.jpg', nullable: true, type: String, description: 'Admin only: the uploaded file name.' })
   originalName?: string | null;
+  @ApiPropertyOptional({
+    description: 'Detail only: the albums this photo is in (hidden albums only for album managers).',
+    example: [{ id: 3, slug: 'barsat-angkor-wat', name: 'Barsat Angkor Wat' }],
+    type: 'array',
+    items: { type: 'object', properties: { id: { type: 'integer' }, slug: { type: 'string' }, name: { type: 'string' } } },
+  })
+  albums?: { id: number; slug: string; name: string }[];
 }
 
 export class PhotoListDto {
@@ -62,6 +69,17 @@ export interface PhotoListRow {
   uploadedBy?: number;
   originalName?: string | null;
   exif?: string | null;
+}
+
+/** Trims the `limit + 1` probe row and builds `{ items, nextCursor, hasMore }`. */
+export function toPage<R extends PhotoListRow>(rows: R[], limit: number, cursorFor: (last: R) => string, dto: (r: R) => PhotoDto): PhotoListDto {
+  const hasMore = rows.length > limit;
+  const pageRows = hasMore ? rows.slice(0, limit) : rows;
+  return {
+    items: pageRows.map(dto),
+    nextCursor: hasMore ? cursorFor(pageRows[pageRows.length - 1]) : null,
+    hasMore,
+  };
 }
 
 const toIso = (v: Date | number) => (v instanceof Date ? v : new Date(v * 1000)).toISOString();

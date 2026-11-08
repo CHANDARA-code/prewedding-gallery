@@ -5,7 +5,7 @@ import { DRIZZLE } from '../db/db.module';
 import type { Db } from '../db/client';
 import { photos } from '../db/schema';
 import { decodeIdCursor, decodeTimeIdCursor, encodeCursor } from '../common/cursor';
-import { PhotoDto, PhotoListDto, PhotoListRow, toPhotoDto } from '../common/photo.dto';
+import { PhotoDto, PhotoListDto, PhotoListRow, toPage, toPhotoDto } from '../common/photo.dto';
 import type { AuthUser } from '../auth/decorators/current-user.decorator';
 import { hasPermission } from '../auth/permissions';
 import { AppEvents } from '../alerts/events';
@@ -30,15 +30,8 @@ export class PhotosService {
     private readonly events: EventEmitter2,
   ) {}
 
-  /** Trims the `limit + 1` probe row and builds `{ items, nextCursor, hasMore }`. */
   private page<R extends PhotoListRow>(rows: R[], limit: number, cursorFor: (last: R) => string, dto: (r: R) => PhotoDto): PhotoListDto {
-    const hasMore = rows.length > limit;
-    const pageRows = hasMore ? rows.slice(0, limit) : rows;
-    return {
-      items: pageRows.map(dto),
-      nextCursor: hasMore ? cursorFor(pageRows[pageRows.length - 1]) : null,
-      hasMore,
-    };
+    return toPage(rows, limit, cursorFor, dto);
   }
 
   async listPublic(user: AuthUser | null, limit: number, cursor?: string): Promise<PhotoListDto> {

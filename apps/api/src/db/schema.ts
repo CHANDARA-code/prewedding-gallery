@@ -77,6 +77,37 @@ export const saves = sqliteTable(
   ],
 );
 
+/** Curated sets of photos (e.g. "Barsat Angkor Wat") that admins put together and anyone can browse. */
+export const albums = sqliteTable('albums', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  slug: text('slug').notNull().unique(), // URL name, e.g. barsat-angkor-wat
+  name: text('name').notNull(),
+  description: text('description'),
+  // Explicit cover; NULL (or a photo that is trashed / no longer in the album) = the album's newest photo.
+  coverPhotoId: integer('cover_photo_id').references(() => photos.id, { onDelete: 'set null' }),
+  hidden: integer('hidden', { mode: 'boolean' }).notNull().default(false), // only album managers see it
+  createdBy: integer('created_by').notNull().references(() => users.id),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+});
+
+export const albumPhotos = sqliteTable(
+  'album_photos',
+  {
+    albumId: integer('album_id').notNull().references(() => albums.id, { onDelete: 'cascade' }),
+    photoId: integer('photo_id').notNull().references(() => photos.id, { onDelete: 'cascade' }),
+    addedBy: integer('added_by').references(() => users.id, { onDelete: 'set null' }),
+    addedAt: integer('added_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  },
+  (t) => [
+    // Album page: `WHERE album_id = ? AND photo_id < ? ORDER BY photo_id DESC` walks this key backwards.
+    primaryKey({ columns: [t.albumId, t.photoId] }),
+    // "Which albums is this photo in" and the cascade from a hard-deleted photo.
+    index('album_photos_photo_idx').on(t.photoId),
+  ],
+);
+
 export type User = typeof users.$inferSelect;
+export type Album = typeof albums.$inferSelect;
 export type PhotoRow = typeof photos.$inferSelect;
 export type Role = User['role'];

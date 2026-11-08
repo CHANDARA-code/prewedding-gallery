@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsOptional, IsPositive, IsString, MaxLength } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 
 export class UpdatePhotoDto {
@@ -51,4 +51,11 @@ export class ExportQueryDto {
   @Transform(({ obj, key }) => [true, 'true', '1'].includes((obj as Record<string, unknown>)[key] as string))
   @IsBoolean()
   mine = false;
+
+  @ApiPropertyOptional({ type: Number, example: 3, description: 'Only photos in this album (its `id`).' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @IsPositive()
+  album?: number;
 }

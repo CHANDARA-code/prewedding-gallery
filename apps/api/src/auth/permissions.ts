@@ -11,6 +11,7 @@ export const PERMISSIONS = {
   'photos.delete': 'Move photos to trash, restore them and see the trash',
   'photos.purge': 'Permanently delete photos',
   'photos.export': 'Export the photo CSV (original file names)',
+  'albums.manage': 'Create, edit and delete albums and choose their photos',
   'users.manage': 'Create users and change roles, permissions and passwords',
 } as const;
 

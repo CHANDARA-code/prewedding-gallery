@@ -22,6 +22,7 @@ interface ExportRow {
   favorited_by: string | null;
   saves: number;
   saved_by: string | null;
+  albums: string | null;
 }
 
 export type ExportCollection = 'all' | 'favorites' | 'saves';
@@ -32,6 +33,8 @@ export interface ExportOptions {
   collection: ExportCollection;
   /** With a collection: only the requesting user's favorites / saves. */
   mineUserId?: number;
+  /** Only photos in this album. */
+  albumId?: number;
   publicUrl: string;
 }
 
@@ -45,6 +48,7 @@ const COLUMNS = [
   'favorited_by',
   'saves',
   'saved_by',
+  'albums',
   'title',
   'caption',
   'status',
@@ -82,7 +86,7 @@ const shutter = (t?: number) => (!t ? '' : t >= 1 ? `${t}s` : `1/${Math.round(1 
 
 /** Builds the admin CSV export. UTF-8 with BOM so Excel shows Khmer titles correctly. */
 export function buildPhotosCsv(db: Db, opts: ExportOptions): { csv: string; rows: number } {
-  const { status, collection, mineUserId, publicUrl } = opts;
+  const { status, collection, mineUserId, albumId, publicUrl } = opts;
   const filters = [];
   if (status === 'active') filters.push(sql`p.deleted_at IS NULL`);
   if (status === 'deleted') filters.push(sql`p.deleted_at IS NOT NULL`);
@@ -91,6 +95,7 @@ export function buildPhotosCsv(db: Db, opts: ExportOptions): { csv: string; rows
     const who = mineUserId ? sql` AND c.user_id = ${mineUserId}` : sql``;
     filters.push(sql`EXISTS (SELECT 1 FROM ${table} c WHERE c.photo_id = p.id${who})`);
   }
+  if (albumId !== undefined) filters.push(sql`EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = ${albumId})`);
   const where = filters.length ? sql`WHERE ${sql.join(filters, sql` AND `)}` : sql``;
   const rows = db.all<ExportRow>(sql`
     SELECT p.id, p.source_archive, p.original_name, p.filename, p.title, p.caption, p.deleted_at, p.width, p.height,
@@ -102,7 +107,10 @@ export function buildPhotosCsv(db: Db, opts: ExportOptions): { csv: string; rows
            (SELECT count(*) FROM saves s WHERE s.photo_id = p.id) AS saves,
            (SELECT group_concat(username, ', ') FROM (
               SELECT su.username FROM saves s JOIN users su ON su.id = s.user_id WHERE s.photo_id = p.id ORDER BY su.username
-           )) AS saved_by
+           )) AS saved_by,
+           (SELECT group_concat(name, ' | ') FROM (
+              SELECT a.name FROM album_photos ap JOIN albums a ON a.id = ap.album_id WHERE ap.photo_id = p.id ORDER BY a.name
+           )) AS albums
     FROM photos p LEFT JOIN users u ON u.id = p.uploaded_by
     ${where}
     ORDER BY p.id DESC`);
@@ -126,6 +134,7 @@ export function buildPhotosCsv(db: Db, opts: ExportOptions): { csv: string; rows
       favorited_by: r.favorited_by,
       saves: r.saves,
       saved_by: r.saved_by,
+      albums: r.albums,
       stored_file_name: r.filename,
       title: r.title,
       caption: r.caption,

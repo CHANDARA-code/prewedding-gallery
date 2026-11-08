@@ -8,6 +8,7 @@ import { ListQueryDto } from '../common/list-query.dto';
 import { ErrorDto, PhotoDto, PhotoListDto } from '../common/photo.dto';
 import { setPublicCacheHeaders } from '../common/cache-headers';
 import { PhotosService } from './photos.service';
+import { AlbumsService } from '../albums/albums.service';
 
 @ApiTags('Photos')
 @ApiBearerAuth()
@@ -16,6 +17,7 @@ import { PhotosService } from './photos.service';
 export class PhotosController {
   constructor(
     private readonly photos: PhotosService,
+    private readonly albums: AlbumsService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
@@ -51,12 +53,12 @@ export class PhotosController {
   @ApiOperation({
     summary: 'Get a photo',
     description:
-      'Photo detail with `mimeType`, `sizeBytes` and camera `exif`. Soft-deleted photos return 404 except for admins, who also get `uploadedBy` and `originalName`.',
+      'Photo detail with `mimeType`, `sizeBytes`, camera `exif` and the `albums` it is in. Soft-deleted photos return 404 except for admins, who also get `uploadedBy` and `originalName`.',
   })
   @ApiOkResponse({ type: PhotoDto })
   @ApiResponse({ status: 404, type: ErrorDto })
   get(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: AuthUser | null, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     setPublicCacheHeaders(req, res);
-    return this.photos.getOne(id, user);
+    return { ...this.photos.getOne(id, user), albums: this.albums.albumsOf(id, user) };
   }
 }

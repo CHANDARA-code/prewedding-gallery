@@ -85,7 +85,7 @@ describe('CSV export', () => {
     expect(res.headers['content-type']).toMatch(/text\/csv/);
     expect(res.headers['content-disposition']).toMatch(/attachment; filename="prewedding-photos-active-/);
     const lines = res.text.replace(/^﻿/, '').trim().split('\r\n');
-    expect(lines[0]).toMatch(/^id,source_zip,original_file_name,detail_url,favorites,favorited_by,saves,saved_by,title/);
+    expect(lines[0]).toMatch(/^id,source_zip,original_file_name,detail_url,favorites,favorited_by,saves,saved_by,albums,title/);
     const row = lines.find((l) => l.startsWith(`${p.id},`))!;
     expect(row.startsWith(`${p.id},web upload,IMG_0001.jpg,https://example.test/photo/${p.id},0,,0,,`)).toBe(true);
     expect(row).toContain(`"'=HYPERLINK(""x"")"`); // formula injection defused

@@ -12,9 +12,11 @@ import { HttpExceptionFilter } from './common/http-exception.filter';
 import { PhotoStorage } from './photos/storage.service';
 import { PhotosRepository } from './photos/photos.repository';
 import { injectOgTags } from './share/og-tags';
+import { AlbumsService } from './albums/albums.service';
 
 const SITE_NAME = 'Pre-Wedding View';
 const SHARE_PATH = /^\/photo\/(\d{1,12})\/?$/;
+const ALBUM_PATH = /^\/albums\/([a-z0-9-]{1,60})\/?$/;
 
 /** index.html, re-read only when the file changes (a web rebuild without an API restart). */
 function htmlReader(path: string) {
@@ -79,8 +81,10 @@ export function setupApp(app: NestExpressApplication, config: AppConfig) {
       );
       const readIndex = htmlReader(indexHtml);
       const repo = app.get(PhotosRepository, { strict: false });
+      const albumsService = app.get(AlbumsService, { strict: false });
       // SPA fallback for client-side routes (/favorite, /save, /photo/:id, ...). Every page carries
-      // Open Graph tags; a /photo/:id page gets that photo's title, caption and share card.
+      // Open Graph tags; a /photo/:id page gets that photo's title, caption and share card, and an
+      // /albums/:slug page the album's name, description and cover.
       app.use((req: Request, res: Response, next: NextFunction) => {
         if ((req.method !== 'GET' && req.method !== 'HEAD') || req.path.startsWith('/api/') || req.path.startsWith('/uploads/')) {
           return next();
@@ -97,6 +101,8 @@ export function setupApp(app: NestExpressApplication, config: AppConfig) {
         };
         const m = SHARE_PATH.exec(req.path);
         const shared = m ? repo.findById(Number(m[1]), null) : undefined;
+        const am = ALBUM_PATH.exec(req.path);
+        const album = am ? albumsService.findPublicForShare(am[1]) : undefined;
         const cardOf = (r: { id: number; previewFilename?: string | null; thumbFilename: string }) =>
           `${origin}/api/v1/photos/${r.id}/og.jpg?v=${encodeURIComponent((r.previewFilename ?? r.thumbFilename).slice(0, 8))}`;
         if (shared && !shared.deletedAt) {
@@ -109,7 +115,18 @@ export function setupApp(app: NestExpressApplication, config: AppConfig) {
             image: cardOf(shared),
             imageAlt: shared.caption || name,
           };
-        } else {
+        } else if (album) {
+          const coverRow = album.cover ? repo.findById(album.cover.id, null) : undefined;
+          og = {
+            ...og,
+            title: `${album.name} · ${SITE_NAME}`,
+            description: album.description || `${album.photoCount} photo${album.photoCount === 1 ? '' : 's'} from our pre-wedding gallery.`,
+            url: `${origin}/albums/${album.slug}`,
+            imageAlt: album.name,
+          };
+          if (coverRow) og.image = cardOf(coverRow);
+        }
+        if (!og.image) {
           const cover = repo.listPublic(null, null, 1)[0]; // newest photo as the gallery's cover
           if (cover) og.image = cardOf(cover);
         }
