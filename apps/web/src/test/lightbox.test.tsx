@@ -20,7 +20,7 @@ describe('photo viewer', () => {
     const dialog = await screen.findByRole('dialog');
     // The regression: the first open must show photo 7 itself (preview + its own thumbnail), never a previous photo.
     expect(viewerImg()).toHaveAttribute('src', '/uploads/previews/7.webp');
-    expect(dialog.querySelector('img.viewer-thumb')).toHaveAttribute('src', '/uploads/thumbs/7.webp');
+    expect(dialog.querySelector('.viewer-slide.is-current img.viewer-thumb')).toHaveAttribute('src', '/uploads/thumbs/7.webp');
     expect(getSearch()).toBe('?photo=7');
 
     await user.keyboard('{ArrowRight}');
@@ -78,7 +78,9 @@ describe('photo viewer', () => {
     const user = userEvent.setup();
     renderApp('/?photo=5', { token: 'admin-token' });
     await screen.findByRole('dialog');
-    await user.click(await screen.findByRole('button', { name: 'Rotate right' }));
+    // Rotating lives in the viewer's ⋮ menu.
+    await user.click(await screen.findByRole('button', { name: 'More options' }));
+    await user.click(await screen.findByRole('menuitem', { name: /Rotate right/ }));
     await waitFor(() => expect(viewerImg()).toHaveAttribute('src', '/uploads/previews/5b.webp'));
     expect(calls.find((c) => c.url === '/admin/photos/5/rotate')?.data).toBe(JSON.stringify({ degrees: 90 }));
     await user.click(screen.getByRole('button', { name: 'Photo details' }));

@@ -27,15 +27,23 @@ interface Props {
   height: number;
   /** First row: load eagerly with high fetch priority instead of lazy. */
   priority?: boolean;
-  onOpen: (shift: boolean) => void;
+  onOpen: (mods: OpenModifiers) => void;
+  /** The list supports select mode: show a check on hover that starts it. */
+  selectable?: boolean;
   /** Select mode: the card is a toggle and the per-photo actions are hidden. */
   selectMode?: boolean;
   selected?: boolean;
 }
 
+/** `shift`: range select. `toggle`: select this photo rather than open it (Ctrl/⌘-click, the hover check). */
+export interface OpenModifiers {
+  shift: boolean;
+  toggle: boolean;
+}
+
 const stop = (e: MouseEvent) => e.stopPropagation();
 
-function PhotoCardInner({ photo, width, height, priority, onOpen, selectMode, selected }: Props) {
+function PhotoCardInner({ photo, width, height, priority, onOpen, selectable, selectMode, selected }: Props) {
   const { user, can, openLogin } = useAuth();
   const { message } = App.useApp();
   const toggleFavorite = useToggle('favorite');
@@ -71,7 +79,7 @@ function PhotoCardInner({ photo, width, height, priority, onOpen, selectMode, se
       <button
         type="button"
         className="photo-open"
-        onClick={(e) => onOpen(e.shiftKey)}
+        onClick={(e) => onOpen({ shift: e.shiftKey, toggle: e.ctrlKey || e.metaKey })}
         aria-label={selectMode ? `Select ${label}` : `Open ${label}`}
         aria-pressed={selectMode ? Boolean(selected) : undefined}
       >
@@ -93,10 +101,27 @@ function PhotoCardInner({ photo, width, height, priority, onOpen, selectMode, se
         )}
       </button>
 
-      {selectMode && (
+      {selectMode ? (
         <span className="select-check" aria-hidden>
           {selected ? <CheckCircleFilled /> : null}
         </span>
+      ) : (
+        selectable && (
+          // Google Photos style: hover a photo, tick its circle to start selecting.
+          <Tooltip title="Select" mouseEnterDelay={0.5}>
+            <button
+              type="button"
+              className="select-hover"
+              aria-label={`Select ${label}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpen({ shift: e.shiftKey, toggle: true });
+              }}
+            >
+              <CheckCircleFilled aria-hidden />
+            </button>
+          </Tooltip>
+        )
       )}
 
       {deleted && (

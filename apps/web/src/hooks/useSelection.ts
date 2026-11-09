@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 
-/** Multi-select over photo ids (album managers picking photos). */
+/** Multi-select over photo ids (select mode on any photo list). */
 export interface Selection {
   active: boolean;
   ids: ReadonlySet<number>;
@@ -9,6 +9,8 @@ export interface Selection {
   stop: () => void;
   toggle: (id: number) => void;
   add: (ids: number[]) => void;
+  /** Replaces the whole selection (drag-to-select keeps it in step with the box). */
+  set: (ids: Iterable<number>) => void;
   clear: () => void;
 }
 
@@ -32,6 +34,7 @@ export function useSelection(initiallyActive = false): Selection {
     [],
   );
   const add = useCallback((more: number[]) => setIds((prev) => new Set([...prev, ...more])), []);
+  const set = useCallback((next: Iterable<number>) => setIds(new Set(next)), []);
 
-  return useMemo(() => ({ active, ids, start, stop, toggle, add, clear }), [active, ids, start, stop, toggle, add, clear]);
+  return useMemo(() => ({ active, ids, start, stop, toggle, add, set, clear }), [active, ids, start, stop, toggle, add, set, clear]);
 }

@@ -2,15 +2,18 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import type { Photo } from '../api/types';
 import { useElementWidth } from '../hooks/useElementWidth';
-import { PhotoCard } from './PhotoCard';
+import { PhotoCard, type OpenModifiers } from './PhotoCard';
+import { useDragSelect, type DragPhase } from '../hooks/useDragSelect';
 
 interface Props {
   photos: Photo[];
   columns: number;
-  /** `shift`: shift-click (range select in select mode). */
-  onOpen: (index: number, shift: boolean) => void;
+  /** Click on a card; `shift` (range) and `toggle` (Ctrl/⌘-click or the hover check) select instead of opening. */
+  onOpen: (index: number, mods: OpenModifiers) => void;
   /** Select mode: cards toggle selection instead of opening the viewer. */
   selected?: ReadonlySet<number>;
+  /** The page supports selecting: cards show a check on hover, and dragging with the mouse draws a selection box. */
+  onDragSelect?: (ids: number[], phase: DragPhase) => void;
 }
 
 const FALLBACK_ASPECT = 1.5;
@@ -42,7 +45,7 @@ export function layoutRows(photos: Photo[], columns: number, width: number, gap:
   return rows;
 }
 
-export function PhotoGrid({ photos, columns, onOpen, selected }: Props) {
+export function PhotoGrid({ photos, columns, onOpen, selected, onDragSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const width = useElementWidth(containerRef);
   const gap = columns <= 2 ? 6 : 10;
@@ -62,13 +65,15 @@ export function PhotoGrid({ photos, columns, onOpen, selected }: Props) {
     getItemKey: (i) => rows[i]?.photos[0]?.id ?? i,
   });
 
+  const drag = useDragSelect(containerRef, rows, gap, onDragSelect);
+
   // Row sizes are pure functions of the layout; re-measure whenever it changes.
   useLayoutEffect(() => {
     virtualizer.measure();
   }, [virtualizer, rows]);
 
   return (
-    <div ref={containerRef} className="photo-grid" role="list" aria-label="Photos">
+    <div ref={containerRef} className="photo-grid" role="list" aria-label="Photos" onPointerDown={drag.onPointerDown}>
       <div style={{ height: virtualizer.getTotalSize(), position: 'relative', width: '100%' }}>
         {virtualizer.getVirtualItems().map((v) => {
           const row = rows[v.index];
@@ -87,7 +92,8 @@ export function PhotoGrid({ photos, columns, onOpen, selected }: Props) {
                     width={row.widths[i]}
                     height={row.height}
                     priority={v.index === 0}
-                    onOpen={(shift) => onOpen(row.start + i, shift)}
+                    onOpen={(mods) => onOpen(row.start + i, mods)}
+                    selectable={onDragSelect !== undefined}
                     selectMode={selected !== undefined}
                     selected={selected?.has(photo.id)}
                   />
@@ -97,6 +103,7 @@ export function PhotoGrid({ photos, columns, onOpen, selected }: Props) {
           );
         })}
       </div>
+      {drag.box && <div className="drag-box" style={drag.box} aria-hidden />}
     </div>
   );
 }

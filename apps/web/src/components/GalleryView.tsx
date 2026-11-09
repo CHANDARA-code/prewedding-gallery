@@ -11,6 +11,8 @@ import { useScrollMemory } from '../hooks/useScrollMemory';
 import { GridSkeleton, PhotoGrid } from './PhotoGrid';
 import { PhotoViewer } from './PhotoViewer';
 import { SelectionBar } from './SelectionBar';
+import type { OpenModifiers } from './PhotoCard';
+import type { DragPhase } from '../hooks/useDragSelect';
 import type { Selection } from '../hooks/useSelection';
 
 interface Props {
@@ -19,7 +21,10 @@ interface Props {
   /** Album slug (scope 'album'). */
   album?: string;
   empty: ReactNode;
-  /** While `selection.active`, tapping a photo selects it (shift-click selects a range; Ctrl/Cmd+A selects all). */
+  /**
+   * While `selection.active`, tapping a photo selects it (shift-click selects a range; Ctrl/Cmd+A selects all).
+   * With a mouse, the hover check, Ctrl/⌘-click or dragging a box over the grid also start select mode.
+   */
   selection?: Selection;
   /** Buttons for the selection bar, given the selected photos in grid order. */
   selectionActions?: (photos: Photo[]) => ReactNode;
@@ -88,8 +93,13 @@ export function GalleryView({ scope, status, album, empty, selection, selectionA
     if (!selecting) anchor.current = null;
   }, [selecting]);
   const onCard = useCallback(
-    (index: number, shift: boolean) => {
-      if (!selection?.active) return openAt(index);
+    (index: number, { shift, toggle }: OpenModifiers) => {
+      if (!selection) return openAt(index);
+      // Ctrl/⌘-click, shift-click or the hover check start select mode from a plain grid.
+      if (!selection.active) {
+        if (!shift && !toggle) return openAt(index);
+        selection.start();
+      }
       const photo = photos[index];
       if (!photo) return;
       if (shift && anchor.current !== null) {
@@ -99,6 +109,28 @@ export function GalleryView({ scope, status, album, empty, selection, selectionA
       anchor.current = index;
     },
     [selection, photos, openAt],
+  );
+
+  // Drag a box with the mouse: what was selected before the drag stays, plus everything the box touches.
+  const dragBase = useRef<{ ids: ReadonlySet<number>; wasActive: boolean } | null>(null);
+  const onDragSelect = useCallback(
+    (ids: number[], phase: DragPhase) => {
+      if (!selection) return;
+      if (phase === 'start') {
+        dragBase.current = { ids: selection.active ? selection.ids : new Set(), wasActive: selection.active };
+        selection.start();
+        return;
+      }
+      const base = dragBase.current;
+      if (!base) return;
+      if (phase === 'move') selection.set([...base.ids, ...ids]);
+      if (phase === 'cancel') {
+        if (base.wasActive) selection.set(base.ids);
+        else selection.stop();
+      }
+      if (phase !== 'move') dragBase.current = null;
+    },
+    [selection],
   );
 
   // Ctrl+A / Cmd+A selects every loaded photo (and enters select mode), like a file manager.
@@ -170,7 +202,13 @@ export function GalleryView({ scope, status, album, empty, selection, selectionA
 
     return (
       <>
-        <PhotoGrid photos={photos} columns={columns} onOpen={onCard} selected={selecting ? selection!.ids : undefined} />
+        <PhotoGrid
+          photos={photos}
+          columns={columns}
+          onOpen={onCard}
+          selected={selecting ? selection!.ids : undefined}
+          onDragSelect={selection ? onDragSelect : undefined}
+        />
 
         {isFetchingNextPage && <GridSkeleton columns={columns} rows={1} />}
 

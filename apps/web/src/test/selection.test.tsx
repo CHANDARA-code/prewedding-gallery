@@ -208,7 +208,7 @@ describe('share links', () => {
     renderApp(`/s/${share.token}`);
     expect(await screen.findByRole('heading', { name: 'For Mom' })).toBeInTheDocument();
     expect(screen.getByText('Shared by demo')).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: /Photo 7/ })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Open Photo 7' })).toBeInTheDocument();
   });
 
   it('shows a log-in prompt on a private link for guests', async () => {
@@ -218,5 +218,28 @@ describe('share links', () => {
     renderApp('/s/AAAAAAAAAAAAAAAAAAAAAA');
     expect(await screen.findByText('Log in to see these photos')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Log in' })).toHaveLength(2); // the page's and the header's
+  });
+});
+
+describe('selecting with the mouse', () => {
+  it('starts select mode from the hover check and from Ctrl/⌘-click', async () => {
+    mockApi(({ url }) => (url === '/photos' ? { status: 200, data: page(range(6, 1), null) } : { status: 404 }));
+    const user = userEvent.setup();
+    renderApp('/');
+    await user.click(await screen.findByRole('button', { name: 'Select Photo 5' }));
+    const bar = await screen.findByRole('toolbar', { name: 'Selected photos' });
+    expect(within(bar).getByText('1 photo selected')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); // it did not open the viewer
+    await user.click(screen.getByRole('button', { name: 'Done selecting' }));
+
+    await user.keyboard('{Control>}');
+    await user.click(screen.getByRole('button', { name: 'Open Photo 3' }));
+    await user.keyboard('{/Control}');
+    expect(within(await screen.findByRole('toolbar', { name: 'Selected photos' })).getByText('1 photo selected')).toBeInTheDocument();
+    // In select mode a shift-click selects the range from the last one.
+    await user.keyboard('{Shift>}');
+    await user.click(screen.getByRole('button', { name: 'Select Photo 6' }));
+    await user.keyboard('{/Shift}');
+    expect(screen.getByText('4 photos selected')).toBeInTheDocument();
   });
 });

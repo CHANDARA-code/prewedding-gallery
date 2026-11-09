@@ -8,6 +8,7 @@ import type { Selection } from '../hooks/useSelection';
 export function SelectionBar({ selection, photos, children }: { selection: Selection; photos: Photo[]; children?: ReactNode }) {
   const n = selection.ids.size;
   const allLoaded = photos.length > 0 && photos.every((p) => selection.ids.has(p.id));
+  const mouse = typeof window !== 'undefined' && !!window.matchMedia?.('(hover: hover) and (pointer: fine)').matches;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -21,7 +22,7 @@ export function SelectionBar({ selection, photos, children }: { selection: Selec
   return (
     <div className="selection-bar" role="toolbar" aria-label="Selected photos">
       <span className="selection-count" aria-live="polite">
-        {n === 0 ? 'Tap photos to select' : `${n} photo${n === 1 ? '' : 's'} selected`}
+        {n === 0 ? (mouse ? 'Click photos or drag across them' : 'Tap photos to select') : `${n} photo${n === 1 ? '' : 's'} selected`}
       </span>
       <Button
         size="small"
