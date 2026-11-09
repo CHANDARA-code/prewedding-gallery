@@ -152,3 +152,27 @@ export type Share = typeof shares.$inferSelect;
 export type Album = typeof albums.$inferSelect;
 export type PhotoRow = typeof photos.$inferSelect;
 export type Role = User['role'];
+
+/**
+ * Refresh tokens ("remember me" sessions). Only a SHA-256 of the token is stored. Each refresh
+ * rotates the token: the old row is revoked and points at its successor; all rows of one sign-in
+ * share a `family`, so a stolen-and-replayed token can end that whole session.
+ */
+export const refreshTokens = sqliteTable(
+  'refresh_tokens',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull().unique(),
+    family: text('family').notNull(),
+    // users.token_version when issued; a password reset or disable bumps it and ends the session.
+    tokenVersion: integer('token_version').notNull(),
+    remember: integer('remember', { mode: 'boolean' }).notNull(),
+    userAgent: text('user_agent'),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
+    revokedAt: integer('revoked_at', { mode: 'timestamp' }),
+    replacedById: integer('replaced_by_id'),
+  },
+  (t) => [index('refresh_tokens_family_idx').on(t.family), index('refresh_tokens_user_idx').on(t.userId)],
+);

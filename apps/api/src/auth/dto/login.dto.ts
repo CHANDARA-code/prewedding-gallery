@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, MaxLength, MinLength } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { ALL_PERMISSIONS, type Permission } from '../permissions';
 
 export class LoginDto {
@@ -14,6 +14,15 @@ export class LoginDto {
   @MinLength(1)
   @MaxLength(256)
   password: string;
+
+  @ApiProperty({
+    required: false,
+    default: true,
+    description: 'Keep me signed in: the refresh cookie lasts REFRESH_REMEMBER_DAYS (default 60) since last use and survives closing the browser. False: a browser-session cookie that lasts REFRESH_SESSION_HOURS (default 12) since last use.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  remember?: boolean;
 }
 
 export class UserDto {

@@ -36,7 +36,7 @@ export class AuthService {
     private readonly jwt: JwtService,
   ) {}
 
-  async login(username: string, password: string): Promise<LoginResponseDto> {
+  async login(username: string, password: string): Promise<{ user: typeof users.$inferSelect; response: LoginResponseDto }> {
     // Usernames are stored lowercase; phones often capitalise the first letter.
     const user = this.db.select().from(users).where(eq(users.username, username.trim().toLowerCase())).get();
     const ok = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH);
@@ -45,6 +45,11 @@ export class AuthService {
     // Checked after the password so a disabled account looks like any other failure to guessers.
     if (user.disabled) throw new LoginFailedException('disabled');
     this.db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id)).run();
+    return { user, response: await this.session(user) };
+  }
+
+  /** A short-lived access token plus the profile, for sign-in and for each refresh. */
+  async session(user: typeof users.$inferSelect): Promise<LoginResponseDto> {
     const expiresIn = ttlSeconds(this.config.jwtExpiresIn);
     const accessToken = await this.jwt.signAsync(
       { sub: user.id, username: user.username, role: user.role, ver: user.tokenVersion },

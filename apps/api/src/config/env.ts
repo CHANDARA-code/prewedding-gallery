@@ -8,6 +8,10 @@ export interface AppConfig {
   databaseUrl: string;
   jwtSecret: string;
   jwtExpiresIn: string;
+  /** Days a "remember me" session lasts without use (each refresh extends it). */
+  refreshRememberDays: number;
+  /** Hours a session without "remember me" lasts without use. */
+  refreshSessionHours: number;
   uploadDir: string;
   maxUploadMb: number;
   webOrigin: string[];
@@ -24,6 +28,13 @@ export interface AppConfig {
 }
 
 const ALERT_GROUPS = ['system', 'auth', 'admin', 'engagement', 'error'];
+
+function positive(raw: string | undefined, fallback: number, name: string): number {
+  if (raw === undefined || raw.trim() === '') return fallback;
+  const n = Number(raw);
+  if (!(n > 0)) throw new Error(`${name} must be a positive number`);
+  return n;
+}
 
 /** Reads and validates the environment. Throws (so the app refuses to boot) on invalid config. */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -60,6 +71,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     databaseUrl: env.DATABASE_URL ?? './data/app.db',
     jwtSecret,
     jwtExpiresIn: env.JWT_EXPIRES_IN ?? '1h',
+    refreshRememberDays: positive(env.REFRESH_REMEMBER_DAYS, 60, 'REFRESH_REMEMBER_DAYS'),
+    refreshSessionHours: positive(env.REFRESH_SESSION_HOURS, 12, 'REFRESH_SESSION_HOURS'),
     uploadDir: env.UPLOAD_DIR ?? './uploads',
     maxUploadMb,
     webOrigin: (env.WEB_ORIGIN ?? 'http://localhost:5173').split(',').map((s) => s.trim()),
