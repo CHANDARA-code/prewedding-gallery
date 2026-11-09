@@ -44,10 +44,11 @@ import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator';
 import { AuthUser, CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AdminListQueryDto } from '../common/list-query.dto';
+import { BatchResultDto, PhotoIdsDto } from '../common/batch.dto';
 import { ErrorDto, PhotoDto, PhotoListDto } from '../common/photo.dto';
 import { setNoStore } from '../common/cache-headers';
 import { PhotosService } from './photos.service';
-import { ExportQueryDto, RotatePhotoDto, UpdatePhotoDto, UploadPhotosBodyDoc, UploadPhotosDto } from './dto/photo-input.dto';
+import { BatchEditDto, ExportQueryDto, RotatePhotoDto, RotatePhotosDto, RotatePhotosResultDto, UpdatePhotoDto, UploadPhotosBodyDoc, UploadPhotosDto } from './dto/photo-input.dto';
 
 @ApiTags('Admin')
 @ApiBearerAuth()
@@ -68,7 +69,7 @@ export class AdminPhotosController {
   @ApiOperation({
     summary: 'Export photos as CSV',
     description:
-      'One row per photo: source zip, original file name, detail link, favorite/save counts and who favorited/saved it, then title, caption, size, dimensions, camera EXIF, uploader and dates. `collection=favorites|saves` keeps only photos someone favorited/saved (`mine=true`: only yours); `album=<id>` keeps only the photos in that album. The `albums` column lists every album a photo is in. UTF-8 with BOM (opens correctly in Excel).',
+      'One row per photo: source zip, original file name, detail link, favorite/save counts and who favorited/saved it, then title, caption, size, dimensions, camera EXIF, uploader and dates. `collection=favorites|saves` keeps only photos someone favorited/saved (`mine=true`: only yours); `album=<id>` keeps only the photos in that album; `ids=1,2,3` only those photos. The `albums` column lists every album a photo is in. UTF-8 with BOM (opens correctly in Excel).',
   })
   @ApiOkResponse({ description: 'text/csv attachment', content: { 'text/csv': { schema: { type: 'string' } } } })
   exportCsv(@Query() q: ExportQueryDto, @CurrentUser() user: AuthUser, @Req() req: Request, @Res() res: Response) {
@@ -80,16 +81,18 @@ export class AdminPhotosController {
       collection: q.collection,
       mineUserId: q.collection !== 'all' && q.mine ? user.id : undefined,
       albumId: q.album,
+      ids: q.ids,
       publicUrl,
     });
     const date = new Date().toISOString().slice(0, 10);
     const base = q.collection === 'all' ? `photos-${q.status}` : `${q.mine ? `${user.username}-` : ''}${q.collection}`;
-    const what = album ? `album-${album.slug}${q.collection === 'all' ? '' : `-${base}`}` : base;
+    const scoped = album ? `album-${album.slug}${q.collection === 'all' ? '' : `-${base}`}` : base;
+    const what = q.ids ? `selected-${rows}${album ? `-${scoped}` : ''}` : scoped;
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="prewedding-${what}-${date}.csv"`);
     res.send(csv);
-    this.events.emit(AppEvents.PhotosExported, { actor: user, rows, status: `${q.collection === 'all' ? q.status : `${q.mine ? 'my ' : ''}${q.collection}`}${album ? ` in album ${album.name}` : ''}` });
+    this.events.emit(AppEvents.PhotosExported, { actor: user, rows, status: `${q.ids ? `${q.ids.length} selected, ` : ''}${q.collection === 'all' ? q.status : `${q.mine ? 'my ' : ''}${q.collection}`}${album ? ` in album ${album.name}` : ''}` });
   }
 
   @Get()
@@ -125,6 +128,45 @@ export class AdminPhotosController {
     return this.photos.upload(user, files, body);
   }
 
+  @Patch()
+  @RequirePermissions('photos.edit')
+  @ApiOperation({ summary: 'Edit several', description: 'Sets the title and/or caption of every photo in `photoIds`. A field left out is kept; an empty string clears it.' })
+  @ApiOkResponse({ type: BatchResultDto })
+  editMany(@Body() dto: BatchEditDto, @CurrentUser() user: AuthUser, @Res({ passthrough: true }) res: Response) {
+    setNoStore(res);
+    return this.photos.editMany(user, dto.photoIds, dto);
+  }
+
+  @Post('trash')
+  @RequirePermissions('photos.delete')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Move several to trash', description: 'Soft-deletes every active photo in `photoIds` (see Soft delete).' })
+  @ApiOkResponse({ type: BatchResultDto })
+  trashMany(@Body() dto: PhotoIdsDto, @CurrentUser() user: AuthUser, @Res({ passthrough: true }) res: Response) {
+    setNoStore(res);
+    return this.photos.trashMany(user, dto.photoIds);
+  }
+
+  @Post('restore')
+  @RequirePermissions('photos.delete')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Restore several', description: 'Restores every trashed photo in `photoIds`.' })
+  @ApiOkResponse({ type: BatchResultDto })
+  restoreMany(@Body() dto: PhotoIdsDto, @CurrentUser() user: AuthUser, @Res({ passthrough: true }) res: Response) {
+    setNoStore(res);
+    return this.photos.restoreMany(user, dto.photoIds);
+  }
+
+  @Post('purge')
+  @RequirePermissions('photos.purge')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Permanently delete several', description: 'Hard-deletes every photo in `photoIds` (see Hard delete). Cannot be undone.' })
+  @ApiOkResponse({ type: BatchResultDto })
+  purgeMany(@Body() dto: PhotoIdsDto, @CurrentUser() user: AuthUser, @Res({ passthrough: true }) res: Response) {
+    setNoStore(res);
+    return this.photos.purgeMany(user, dto.photoIds);
+  }
+
   @Patch(':id')
   @RequirePermissions('photos.edit')
   @ApiOperation({ summary: 'Update photo', description: 'Update the title and/or caption.' })
@@ -133,6 +175,20 @@ export class AdminPhotosController {
   update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdatePhotoDto, @CurrentUser() user: AuthUser, @Res({ passthrough: true }) res: Response) {
     setNoStore(res);
     return this.photos.update(user, id, dto);
+  }
+
+  @Post('rotate')
+  @RequirePermissions('photos.edit')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Rotate several',
+    description:
+      'Rotates up to 24 photos by the same `degrees` (clockwise, relative to each one\'s current rotation). Unknown ids are skipped; send bigger selections in batches. The original files are never changed.',
+  })
+  @ApiOkResponse({ type: RotatePhotosResultDto })
+  rotateMany(@Body() dto: RotatePhotosDto, @CurrentUser() user: AuthUser, @Res({ passthrough: true }) res: Response) {
+    setNoStore(res);
+    return this.photos.rotateMany(user, dto.photoIds, dto.degrees);
   }
 
   @Post(':id/rotate')

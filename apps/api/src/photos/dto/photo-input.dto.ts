@@ -1,6 +1,43 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsIn, IsInt, IsOptional, IsPositive, IsString, MaxLength } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsPositive, IsString, MaxLength } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
+import { PhotoDto } from '../../common/photo.dto';
+import { BATCH_MAX, PhotoIdsDto } from '../../common/batch.dto';
+
+/** `ids=3,9,12` (or repeated `ids=`) → [3, 9, 12]; anything unparsable stays and fails validation. */
+const idList = ({ value }: { value: unknown }) =>
+  (Array.isArray(value) ? value : String(value ?? '').split(','))
+    .map((v) => String(v).trim())
+    .filter(Boolean)
+    .map((v) => (/^\d+$/.test(v) ? Number(v) : v));
+
+/** Most photos in one ZIP download (keeps it well under 4 GB and a reasonable wait). */
+export const DOWNLOAD_MAX = 200;
+
+export class DownloadQueryDto {
+  @ApiProperty({ type: String, example: '12,9,4', description: `Comma-separated ids of active photos, 1 to ${DOWNLOAD_MAX}.` })
+  @Transform(idList)
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(DOWNLOAD_MAX)
+  @IsInt({ each: true })
+  @IsPositive({ each: true })
+  ids: number[];
+}
+
+export class BatchEditDto extends PhotoIdsDto {
+  @ApiPropertyOptional({ example: 'Angkor Wat', nullable: true, type: String, description: 'Omit to keep each title; empty clears it.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  title?: string | null;
+
+  @ApiPropertyOptional({ example: 'Sunrise at the west gate', nullable: true, type: String, description: 'Omit to keep each caption; empty clears it.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  caption?: string | null;
+}
 
 export class UpdatePhotoDto {
   @ApiPropertyOptional({ example: 'Golden hour', nullable: true, type: String })
@@ -34,6 +71,26 @@ export class RotatePhotoDto {
   degrees: number;
 }
 
+/** Most photos one rotate request may re-render (about 1 s each); clients send larger selections in batches. */
+export const ROTATE_BATCH_MAX = 24;
+
+export class RotatePhotosDto extends RotatePhotoDto {
+  @ApiProperty({ type: [Number], example: [12, 9, 4], description: `1 to ${ROTATE_BATCH_MAX} photo ids` })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(ROTATE_BATCH_MAX)
+  @IsInt({ each: true })
+  @IsPositive({ each: true })
+  photoIds: number[];
+}
+
+export class RotatePhotosResultDto {
+  @ApiProperty({ type: () => PhotoDto, isArray: true, description: 'The photos that were rotated, as they are now.' })
+  photos: PhotoDto[];
+  @ApiProperty({ type: [Number], description: 'Ids whose re-render failed; those photos are unchanged.' })
+  failed: number[];
+}
+
 export class ExportQueryDto {
   @ApiPropertyOptional({ enum: ['active', 'deleted', 'all'], default: 'all' })
   @IsOptional()
@@ -58,4 +115,14 @@ export class ExportQueryDto {
   @IsInt()
   @IsPositive()
   album?: number;
+
+  @ApiPropertyOptional({ type: String, example: '12,9,4', description: `Only these photo ids (comma-separated, up to ${BATCH_MAX}).` })
+  @IsOptional()
+  @Transform(idList)
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(BATCH_MAX)
+  @IsInt({ each: true })
+  @IsPositive({ each: true })
+  ids?: number[];
 }

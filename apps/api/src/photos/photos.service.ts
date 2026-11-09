@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { count, eq, isNull } from 'drizzle-orm';
+import { and, count, eq, inArray, isNull } from 'drizzle-orm';
 import { DRIZZLE } from '../db/db.module';
 import type { Db } from '../db/client';
 import { photos } from '../db/schema';
@@ -8,7 +8,8 @@ import { decodeIdCursor, decodeTimeIdCursor, encodeCursor } from '../common/curs
 import { PhotoDto, PhotoListDto, PhotoListRow, toPage, toPhotoDto } from '../common/photo.dto';
 import type { AuthUser } from '../auth/decorators/current-user.decorator';
 import { hasPermission } from '../auth/permissions';
-import { AppEvents } from '../alerts/events';
+import { AppEvents, type PhotosBatchEvent } from '../alerts/events';
+import { BatchResultDto, chunks } from '../common/batch.dto';
 import { AdminStatus, PhotosRepository } from './photos.repository';
 import { StorageService } from './storage.service';
 import { PhotoCacheService } from './photo-cache.service';
@@ -124,14 +125,7 @@ export class PhotosService {
 
   async softDelete(user: AuthUser, id: number): Promise<PhotoDto> {
     const row = this.findRaw(id);
-    if (!row.deletedAt) {
-      await this.storage.moveFiles(row, 'trash');
-      try {
-        this.db.update(photos).set({ deletedAt: new Date() }).where(eq(photos.id, id)).run();
-      } catch (err) {
-        await this.storage.moveFiles(row, 'live');
-        throw err;
-      }
+    if (await this.trashRow(row)) {
       this.cache.bump();
       this.events.emit(AppEvents.PhotoSoftDeleted, { actor: user, photoId: id, title: row.title });
     }
@@ -140,14 +134,7 @@ export class PhotosService {
 
   async restore(user: AuthUser, id: number): Promise<PhotoDto> {
     const row = this.findRaw(id);
-    if (row.deletedAt) {
-      await this.storage.moveFiles(row, 'live');
-      try {
-        this.db.update(photos).set({ deletedAt: null }).where(eq(photos.id, id)).run();
-      } catch (err) {
-        await this.storage.moveFiles(row, 'trash');
-        throw err;
-      }
+    if (await this.restoreRow(row)) {
       this.cache.bump();
       this.events.emit(AppEvents.PhotoRestored, { actor: user, photoId: id, title: row.title });
     }
@@ -156,15 +143,113 @@ export class PhotosService {
 
   async hardDelete(user: AuthUser, id: number): Promise<void> {
     const row = this.findRaw(id);
-    this.db.delete(photos).where(eq(photos.id, id)).run(); // favorites/saves cascade
+    await this.purgeRow(row);
     this.cache.bump();
+    this.events.emit(AppEvents.PhotoHardDeleted, { actor: user, photoId: id, title: row.title });
+  }
+
+  /* ---------- batches (the selection bar) ---------- */
+
+  /** Sets the title and/or caption of several photos (empty string clears). */
+  editMany(user: AuthUser, ids: number[], dto: UpdatePhotoDto): BatchResultDto {
+    const patch: Partial<typeof photos.$inferInsert> = {};
+    if (dto.title !== undefined) patch.title = dto.title || null;
+    if (dto.caption !== undefined) patch.caption = dto.caption || null;
+    if (!Object.keys(patch).length) return { changed: 0 };
+    const changed = this.db.transaction((tx) =>
+      chunks([...new Set(ids)]).reduce((n, chunk) => n + tx.update(photos).set(patch).where(inArray(photos.id, chunk)).run().changes, 0),
+    );
+    if (changed) this.batchDone(user, 'edited', [...new Set(ids)]);
+    return { changed };
+  }
+
+  trashMany(user: AuthUser, ids: number[]) {
+    return this.eachRow(user, ids, 'trashed', (row) => this.trashRow(row));
+  }
+
+  restoreMany(user: AuthUser, ids: number[]) {
+    return this.eachRow(user, ids, 'restored', (row) => this.restoreRow(row));
+  }
+
+  purgeMany(user: AuthUser, ids: number[]) {
+    return this.eachRow(user, ids, 'purged', async (row) => (await this.purgeRow(row), true));
+  }
+
+  /** Runs `fn` on each existing photo in turn (they move files, so not in parallel); one alert at the end. */
+  private async eachRow(
+    user: AuthUser,
+    ids: number[],
+    action: PhotosBatchEvent['action'],
+    fn: (row: typeof photos.$inferSelect) => Promise<boolean>,
+  ): Promise<BatchResultDto> {
+    const done: number[] = [];
+    for (const chunk of chunks([...new Set(ids)])) {
+      for (const row of this.db.select().from(photos).where(inArray(photos.id, chunk)).all()) {
+        if (await fn(row)) done.push(row.id);
+      }
+    }
+    if (done.length) this.batchDone(user, action, done);
+    return { changed: done.length };
+  }
+
+  private batchDone(user: AuthUser, action: PhotosBatchEvent['action'], photoIds: number[]) {
+    this.cache.bump();
+    this.events.emit(AppEvents.PhotosBatch, { actor: user, action, photoIds });
+  }
+
+  /** Moves an active photo's files to trash and marks it deleted. False if it already was. */
+  private async trashRow(row: typeof photos.$inferSelect): Promise<boolean> {
+    if (row.deletedAt) return false;
+    await this.storage.moveFiles(row, 'trash');
+    try {
+      this.db.update(photos).set({ deletedAt: new Date() }).where(eq(photos.id, row.id)).run();
+    } catch (err) {
+      await this.storage.moveFiles(row, 'live');
+      throw err;
+    }
+    return true;
+  }
+
+  private async restoreRow(row: typeof photos.$inferSelect): Promise<boolean> {
+    if (!row.deletedAt) return false;
+    await this.storage.moveFiles(row, 'live');
+    try {
+      this.db.update(photos).set({ deletedAt: null }).where(eq(photos.id, row.id)).run();
+    } catch (err) {
+      await this.storage.moveFiles(row, 'trash');
+      throw err;
+    }
+    return true;
+  }
+
+  private async purgeRow(row: typeof photos.$inferSelect): Promise<void> {
+    this.db.delete(photos).where(eq(photos.id, row.id)).run(); // favorites/saves/album entries cascade
     try {
       await this.storage.unlinkAll(row);
     } catch (err) {
       // Orphaned files are tolerable, dangling rows are not (spec 6.4).
-      this.logger.error(`Hard delete of photo ${id}: file unlink failed: ${(err as Error).message}`);
+      this.logger.error(`Hard delete of photo ${row.id}: file unlink failed: ${(err as Error).message}`);
     }
-    this.events.emit(AppEvents.PhotoHardDeleted, { actor: user, photoId: id, title: row.title });
+  }
+
+  /** Active photos for a ZIP download, in the order asked, with their original file paths. */
+  downloadable(ids: number[]): { id: number; path: string; name: string }[] {
+    const unique = [...new Set(ids)];
+    const rows = chunks(unique).flatMap((chunk) =>
+      this.db
+        .select({ id: photos.id, filename: photos.filename })
+        .from(photos)
+        .where(and(inArray(photos.id, chunk), isNull(photos.deletedAt)))
+        .all(),
+    );
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    return unique
+      .filter((id) => byId.has(id))
+      .map((id) => {
+        const { filename } = byId.get(id)!;
+        const ext = filename.split('.').pop() ?? 'jpg';
+        return { id, path: this.storage.originalPath(filename), name: `prewedding-${id}.${ext}` };
+      });
   }
 
   /**
@@ -174,23 +259,64 @@ export class PhotosService {
    */
   async rotate(user: AuthUser, id: number, degrees: number): Promise<PhotoDto> {
     const row = this.findRaw(id);
+    const rotation = await this.rotateRow(row, degrees);
+    if (rotation !== row.rotation) {
+      this.cache.bump();
+      this.events.emit(AppEvents.PhotoRotated, { actor: user, photoId: id, title: row.title, rotation });
+    }
+    return this.getOne(id, user);
+  }
+
+  /**
+   * Rotates several photos by the same `degrees`. Ids that don't exist (or are in trash, for someone who
+   * can't see trash) are skipped. Renders go through the storage concurrency limit; one that fails is
+   * reported in `failed` and leaves that photo as it was.
+   */
+  async rotateMany(user: AuthUser, ids: number[], degrees: number): Promise<{ photos: PhotoDto[]; failed: number[] }> {
+    const unique = [...new Set(ids)];
+    const seesTrash = hasPermission(user, 'photos.delete');
+    const rows = this.db
+      .select()
+      .from(photos)
+      .where(inArray(photos.id, unique))
+      .all()
+      .filter((r) => seesTrash || !r.deletedAt);
+    const results = await Promise.allSettled(rows.map((r) => this.rotateRow(r, degrees)));
+    const failed: number[] = [];
+    results.forEach((r, i) => {
+      if (r.status === 'rejected') {
+        failed.push(rows[i].id);
+        this.logger.error(`Rotate photo ${rows[i].id}: ${(r.reason as Error)?.message}`);
+      }
+    });
+    const done = rows.filter((_, i) => results[i].status === 'fulfilled').map((r) => r.id);
+    if (done.length) {
+      this.cache.bump();
+      this.events.emit(AppEvents.PhotosRotated, { actor: user, photoIds: done, degrees });
+    }
+    // Keep the order the caller asked for.
+    const order = new Map(unique.map((id, i) => [id, i]));
+    done.sort((a, b) => order.get(a)! - order.get(b)!);
+    return { photos: done.map((id) => this.getOne(id, user)), failed };
+  }
+
+  /** Re-renders one photo at its new rotation and swaps the row over; returns the new rotation. */
+  private async rotateRow(row: typeof photos.$inferSelect, degrees: number): Promise<number> {
     const rotation = (((row.rotation + degrees) % 360) + 360) % 360;
-    if (rotation === row.rotation) return this.getOne(id, user);
+    if (rotation === row.rotation) return rotation;
     const next = await this.storage.rerender(row.filename, rotation, Boolean(row.deletedAt));
     try {
       this.db
         .update(photos)
         .set({ rotation, thumbFilename: next.thumbFilename, previewFilename: next.previewFilename, width: next.width, height: next.height })
-        .where(eq(photos.id, id))
+        .where(eq(photos.id, row.id))
         .run();
     } catch (err) {
       await this.storage.unlinkDerivatives(next.thumbFilename, next.previewFilename);
       throw err;
     }
     await this.storage.unlinkDerivatives(row.thumbFilename, row.previewFilename);
-    this.cache.bump();
-    this.events.emit(AppEvents.PhotoRotated, { actor: user, photoId: id, title: row.title, rotation });
-    return this.getOne(id, user);
+    return rotation;
   }
 
   /** Path of the 1200x630 share card (og:image) of an active photo. */

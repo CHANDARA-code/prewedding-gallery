@@ -35,6 +35,8 @@ export interface ExportOptions {
   mineUserId?: number;
   /** Only photos in this album. */
   albumId?: number;
+  /** Only these photos (a selection). */
+  ids?: number[];
   publicUrl: string;
 }
 
@@ -86,7 +88,7 @@ const shutter = (t?: number) => (!t ? '' : t >= 1 ? `${t}s` : `1/${Math.round(1 
 
 /** Builds the admin CSV export. UTF-8 with BOM so Excel shows Khmer titles correctly. */
 export function buildPhotosCsv(db: Db, opts: ExportOptions): { csv: string; rows: number } {
-  const { status, collection, mineUserId, albumId, publicUrl } = opts;
+  const { status, collection, mineUserId, albumId, ids, publicUrl } = opts;
   const filters = [];
   if (status === 'active') filters.push(sql`p.deleted_at IS NULL`);
   if (status === 'deleted') filters.push(sql`p.deleted_at IS NOT NULL`);
@@ -95,6 +97,7 @@ export function buildPhotosCsv(db: Db, opts: ExportOptions): { csv: string; rows
     const who = mineUserId ? sql` AND c.user_id = ${mineUserId}` : sql``;
     filters.push(sql`EXISTS (SELECT 1 FROM ${table} c WHERE c.photo_id = p.id${who})`);
   }
+  if (ids?.length) filters.push(sql`p.id IN (${sql.join(ids.map((id) => sql`${id}`), sql`, `)})`);
   if (albumId !== undefined) filters.push(sql`EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = ${albumId})`);
   const where = filters.length ? sql`WHERE ${sql.join(filters, sql` AND `)}` : sql``;
   const rows = db.all<ExportRow>(sql`

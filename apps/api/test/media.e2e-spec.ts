@@ -76,6 +76,32 @@ describe('rotate', () => {
     await ctx.http.post(`${api}/admin/photos/${p.id}/rotate`).set(bearer(ctx.tokens.demo)).send({ degrees: 90 }).expect(403);
     await ctx.http.post(`${api}/admin/photos/${p.id}/rotate`).set(bearer(ctx.tokens.admin)).send({ degrees: 45 }).expect(400);
   });
+
+  it('rotates several photos at once, skipping unknown ids', async () => {
+    const [a, b] = [await upload(), await upload()];
+    const rotate = (body: object, token = ctx.tokens.admin) => ctx.http.post(`${api}/admin/photos/rotate`).set(bearer(token)).send(body);
+
+    const res = await rotate({ photoIds: [b.id, a.id, 999999, b.id], degrees: 90 }).expect(200);
+    expect(res.body.failed).toEqual([]);
+    expect(res.body.photos.map((p: { id: number }) => p.id)).toEqual([b.id, a.id]);
+    for (const p of res.body.photos) expect(p).toMatchObject({ rotation: 90, width: 60, height: 80 });
+    expect(existsSync(join(ctx.uploadDir, a.thumbUrl.replace('/uploads/', '')))).toBe(false);
+    // Lists pick up the new renderings straight away.
+    const listed = (await ctx.http.get(`${api}/photos?limit=50`).expect(200)).body.items.find((p: { id: number }) => p.id === a.id);
+    expect(listed).toMatchObject({ rotation: 90, thumbUrl: res.body.photos[1].thumbUrl });
+
+    const back = await rotate({ photoIds: [a.id], degrees: 180 }).expect(200);
+    expect(back.body.photos[0]).toMatchObject({ rotation: 270, width: 60, height: 80 });
+
+    // Trashed photos rotate too (an admin can see the trash).
+    await ctx.http.delete(`${api}/admin/photos/${b.id}`).set(bearer(ctx.tokens.admin)).expect(200);
+    expect((await rotate({ photoIds: [b.id], degrees: -90 }).expect(200)).body.photos[0]).toMatchObject({ rotation: 0, width: 80, height: 60 });
+
+    await rotate({ photoIds: [a.id], degrees: 90 }, ctx.tokens.demo).expect(403);
+    await rotate({ photoIds: [], degrees: 90 }).expect(400);
+    await rotate({ photoIds: [a.id], degrees: 45 }).expect(400);
+    await rotate({ photoIds: Array.from({ length: 25 }, (_, i) => i + 1), degrees: 90 }).expect(400);
+  });
 });
 
 describe('CSV export', () => {

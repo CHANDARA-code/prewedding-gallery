@@ -1,4 +1,4 @@
-import { Controller, Get, Inject, Param, ParseIntPipe, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Inject, Logger, NotFoundException, Param, ParseIntPipe, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiProduces, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { APP_CONFIG, AppConfig } from '../config/env';
 import type { Request, Response } from 'express';
@@ -9,12 +9,16 @@ import { ErrorDto, PhotoDto, PhotoListDto } from '../common/photo.dto';
 import { setPublicCacheHeaders } from '../common/cache-headers';
 import { PhotosService } from './photos.service';
 import { AlbumsService } from '../albums/albums.service';
+import { DownloadQueryDto } from './dto/photo-input.dto';
+import { prepareZip, writeZip, ZIP_MAX_BYTES } from './zip-stream';
 
 @ApiTags('Photos')
 @ApiBearerAuth()
 @Controller('photos')
 @UseGuards(OptionalJwtAuthGuard)
 export class PhotosController {
+  private readonly logger = new Logger(PhotosController.name);
+
   constructor(
     private readonly photos: PhotosService,
     private readonly albums: AlbumsService,
@@ -34,6 +38,34 @@ export class PhotosController {
     const path = await this.photos.shareCard(id, label);
     res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
     res.sendFile(path, { dotfiles: 'allow' }); // the cache dir is .og (never served statically)
+  }
+
+  // Declared before `:id` so "download.zip" is never parsed as an id.
+  @Get('download.zip')
+  @ApiOperation({
+    summary: 'Download several as ZIP',
+    description: 'The original files of up to 200 active photos, streamed as one ZIP (`prewedding-<id>.<ext>` inside). Public, like single downloads.',
+  })
+  @ApiProduces('application/zip')
+  @ApiResponse({ status: 200, description: 'ZIP archive' })
+  @ApiResponse({ status: 404, type: ErrorDto, description: 'None of the ids is an active photo' })
+  async downloadZip(@Query() q: DownloadQueryDto, @Res() res: Response) {
+    const zip = await prepareZip(this.photos.downloadable(q.ids));
+    if (!zip.entries.length) throw new NotFoundException('None of these photos can be downloaded');
+    if (zip.totalBytes > ZIP_MAX_BYTES) throw new BadRequestException('Too much for one download; select fewer photos');
+    const date = new Date().toISOString().slice(0, 10);
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Length', String(zip.totalBytes));
+    res.setHeader('Content-Disposition', `attachment; filename="prewedding-${zip.entries.length}-photos-${date}.zip"`);
+    try {
+      await writeZip(zip, res);
+      res.end();
+    } catch (err) {
+      // Headers are gone; all we can do is cut the connection so the browser reports a failed download.
+      this.logger.error(`ZIP download failed: ${(err as Error).message}`);
+      res.destroy(err as Error);
+    }
   }
 
   @Get()

@@ -5,16 +5,20 @@ import { escapeHtml as e } from './telegram.client';
 import {
   Actor,
   AlbumChangedEvent,
+  CollectionBatchEvent,
   AppEvents,
   ErrorEvent,
   LoginEvent,
   PhotoEvent,
+  PhotosBatchEvent,
   PhotosExportedEvent,
+  PhotosRotatedEvent,
   PhotosUploadedEvent,
   UserChangedEvent,
 } from './events';
 
 const who = (a: Actor) => `<b>${e(a.username)}</b>${a.role === 'admin' ? ' (admin)' : ''}`;
+const idList = (ids: number[]) => (ids.length > 12 ? `${ids.slice(0, 12).join(', ')}…` : ids.join(', '));
 const mb = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
 /** Listens to domain events and turns them into Telegram alerts. */
@@ -72,6 +76,25 @@ export class AlertsListener {
   @OnEvent(AppEvents.PhotoRotated)
   onRotated(p: PhotoEvent) {
     this.alerts.notify('admin', `🔄 ${who(p.actor)} rotated photo #${p.photoId} to ${p.rotation}°`);
+  }
+
+  @OnEvent(AppEvents.PhotosRotated)
+  onRotatedMany(p: PhotosRotatedEvent) {
+    const dir = p.degrees === 180 ? '180°' : p.degrees > 0 ? 'right' : 'left';
+    this.alerts.notify('admin', `🔄 ${who(p.actor)} rotated ${p.photoIds.length} photo(s) ${dir} · ids ${idList(p.photoIds)}`);
+  }
+
+  @OnEvent(AppEvents.PhotosBatch)
+  onBatch(p: PhotosBatchEvent) {
+    const verb = { edited: ['✏️', 'edited'], trashed: ['🗑️', 'moved to trash'], restored: ['♻️', 'restored'], purged: ['❌', 'permanently deleted'] }[p.action];
+    this.alerts.notify('admin', `${verb[0]} ${who(p.actor)} ${verb[1]} ${p.photoIds.length} photo(s) · ids ${idList(p.photoIds)}`);
+  }
+
+  @OnEvent(AppEvents.CollectionBatch)
+  onCollectionBatch(p: CollectionBatchEvent) {
+    const icon = p.kind === 'favorites' ? (p.on ? '❤️' : '🤍') : p.on ? '🔖' : '📑';
+    const verb = p.kind === 'favorites' ? (p.on ? 'favorited' : 'un-favorited') : p.on ? 'saved' : 'un-saved';
+    this.alerts.notify('engagement', `${icon} ${who(p.actor)} ${verb} ${p.count} photo(s) at once`);
   }
 
   @OnEvent(AppEvents.UserChanged)

@@ -1,5 +1,5 @@
-import { Controller, Delete, Get, HttpCode, Param, ParseIntPipe, Put, Query, Res, Type, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseIntPipe, Post, Put, Query, Res, Type, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiNoContentResponse, ApiProperty, ApiOkResponse, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -10,6 +10,14 @@ import { setNoStore } from '../common/cache-headers';
 import { PhotosService } from '../photos/photos.service';
 import { CollectionService } from './collection.service';
 import { AppEvents } from '../alerts/events';
+import { BatchResultDto, PhotoIdsDto } from '../common/batch.dto';
+import { IsBoolean } from 'class-validator';
+
+export class CollectionBatchDto extends PhotoIdsDto {
+  @ApiProperty({ example: true, description: 'true adds them, false removes them.' })
+  @IsBoolean()
+  on: boolean;
+}
 
 interface CollectionSpec {
   kind: 'favorites' | 'saves';
@@ -45,6 +53,20 @@ export function createCollectionController(spec: CollectionSpec): Type<unknown> 
     list(@Query() q: ListQueryDto, @CurrentUser() user: AuthUser, @Res({ passthrough: true }) res: Response) {
       setNoStore(res);
       return this.photos.listCollection(spec.kind, user, q.limit, q.cursor);
+    }
+
+    @Post(`me/${spec.kind}/batch`)
+    @HttpCode(200)
+    @ApiOperation({
+      summary: `${spec.verb === 'favorite' ? 'Favorite' : 'Save'} or un-${spec.verb} several photos`,
+      description: `\`on: true\` adds every active photo in \`photoIds\` to your ${spec.kind}; \`on: false\` removes them. Idempotent.`,
+    })
+    @ApiOkResponse({ type: BatchResultDto })
+    batch(@Body() dto: CollectionBatchDto, @CurrentUser() user: AuthUser, @Res({ passthrough: true }) res: Response): BatchResultDto {
+      setNoStore(res);
+      const changed = dto.on ? this.service.addMany(spec.kind, user.id, dto.photoIds) : this.service.removeMany(spec.kind, user.id, dto.photoIds);
+      if (changed) this.events.emit(AppEvents.CollectionBatch, { actor: user, kind: spec.kind, on: dto.on, count: changed });
+      return { changed };
     }
 
     @Put(`photos/:id/${spec.verb}`)

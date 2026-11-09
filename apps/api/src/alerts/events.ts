@@ -8,6 +8,9 @@ export const AppEvents = {
   PhotosUploaded: 'photo.uploaded',
   PhotoUpdated: 'photo.updated',
   PhotoRotated: 'photo.rotated',
+  PhotosRotated: 'photo.rotated_many',
+  PhotosBatch: 'photo.batch',
+  CollectionBatch: 'collection.batch',
   PhotosExported: 'photo.exported',
   PhotoSoftDeleted: 'photo.soft_deleted',
   PhotoRestored: 'photo.restored',
@@ -46,6 +49,22 @@ export interface PhotoEvent {
   photoId: number;
   title?: string | null;
   rotation?: number;
+}
+export interface PhotosRotatedEvent {
+  actor: Actor;
+  photoIds: number[];
+  degrees: number;
+}
+export interface PhotosBatchEvent {
+  actor: Actor;
+  action: 'edited' | 'trashed' | 'restored' | 'purged';
+  photoIds: number[];
+}
+export interface CollectionBatchEvent {
+  actor: Actor;
+  kind: 'favorites' | 'saves';
+  on: boolean;
+  count: number;
 }
 export interface PhotosExportedEvent {
   actor: Actor;
