@@ -2,7 +2,7 @@
 
 A photo gallery for pre-wedding photos. Anyone can browse. Logged-in users can favorite and save photos. An admin can upload photos and delete them (soft or hard).
 
-- **Version:** 1.6 (Google Photos-style viewer and mouse selection; 1.5 added refresh tokens and "Keep me signed in"; 1.4 added share links; 1.3 added batch actions on selected photos; 1.2 added albums; 1.1 added cursor pagination, infinite scroll, API and DB performance work)
+- **Version:** 1.7 (motion system and site link-preview photo; 1.6 added the Google Photos-style viewer and mouse selection; 1.5 added refresh tokens and "Keep me signed in"; 1.4 added share links; 1.3 added batch actions on selected photos; 1.2 added albums; 1.1 added cursor pagination, infinite scroll, API and DB performance work)
 - **Date:** 2026-11-09
 
 ---
@@ -707,3 +707,21 @@ Tables: `shares`, `share_photos` (keyset over `(share_id, photo_id)`) and `share
 - Hovering a photo shows a check circle; clicking it enters select mode with that photo selected.
 - Ctrl/⌘-click selects instead of opening; shift-click selects a range from the last photo.
 - Press and drag anywhere on the grid to draw a selection box: every photo it touches is added to the selection, the page auto-scrolls near the window's top or bottom edge, and Esc cancels the drag. Hits are computed from the grid layout, so photos in rows scrolled out of view still count.
+
+## 15. Motion and the site link preview (v1.7)
+
+**Motion** follows the animation skills in `.claude/skills` (Emil Kowalski's rules): every animation has a named purpose, stays under 300 ms, animates only `transform`/`opacity`, uses strong curves, and respects `prefers-reduced-motion`. Tokens: `--ease-out: cubic-bezier(0.23, 1, 0.32, 1)`, `--ease-in-out: cubic-bezier(0.77, 0, 0.175, 1)`, `--ease-drawer: cubic-bezier(0.32, 0.72, 0, 1)`, `--press: 160ms`, `--enter: 200ms`; the Ant Design theme uses the same curves (dropdowns, modals, toasts, tooltips, tab ink bar).
+
+| Where | Purpose | Motion |
+| --- | --- | --- |
+| Buttons, cards, rows, viewer controls | Feedback | `:active` `scale(0.97)` (cards `0.985`), 160 ms |
+| Page / tab change | Preventing a jarring change | content fades up 4 px, 200 ms |
+| Thumbnails from the network | Preventing a jarring change | 200 ms fade (cached ones show at once) |
+| Skeleton → first photos, Albums, Shared links | Preventing a jarring change | 260 ms fade-up, 40 ms stagger per row (capped), never blocks clicks |
+| Opening / closing a photo | Spatial consistency | grows out of its grid thumbnail (300 ms) and shrinks back into it (240 ms) with WAAPI; a plain fade when the thumbnail isn't on screen |
+| Selection bar | Spatial consistency | slides up from the bottom (260 ms, drawer curve) and leaves the same way (180 ms) |
+| Selecting, favoriting on a card | State / feedback | check and heart pop |
+
+Deliberately not animated: hover zoom on grid photos (seen dozens of times a day), scroll reveal on the gallery, the Ctrl/⌘+A shortcut, the drag-select box, counters.
+
+**Site link preview.** `SITE_COVER_PHOTO_ID` picks the photo whose 1200×630 card is the Open Graph / Twitter image for the home page and for pages without their own image (photo, album and public share links keep theirs). Empty, unknown or trashed falls back to the newest photo.
