@@ -1,5 +1,5 @@
 import { Button, Dropdown, FloatButton, Tag, Tooltip } from 'antd';
-import { CloudUploadOutlined, LoginOutlined, LogoutOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons';
+import { CloudUploadOutlined, LinkOutlined, LoginOutlined, LogoutOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons';
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
@@ -37,11 +37,13 @@ export function AppHeader() {
               placement="bottomRight"
               menu={{
                 items: [
+                  { key: 'shares', icon: <LinkOutlined />, label: 'Shared links' },
                   ...(isAdmin ? [{ key: 'users', icon: <TeamOutlined />, label: 'Manage users' }] : []),
                   { key: 'logout', icon: <LogoutOutlined />, label: 'Log out' },
                 ],
                 onClick: ({ key }) => {
                   if (key === 'users') navigate('/users');
+                  if (key === 'shares') navigate('/shares');
                   if (key === 'logout') logout();
                 },
               }}

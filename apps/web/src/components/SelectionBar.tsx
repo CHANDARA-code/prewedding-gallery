@@ -21,7 +21,7 @@ export function SelectionBar({ selection, photos, children }: { selection: Selec
   return (
     <div className="selection-bar" role="toolbar" aria-label="Selected photos">
       <span className="selection-count" aria-live="polite">
-        {n === 0 ? 'Tap photos to select' : `${n} selected`}
+        {n === 0 ? 'Tap photos to select' : `${n} photo${n === 1 ? '' : 's'} selected`}
       </span>
       <Button
         size="small"

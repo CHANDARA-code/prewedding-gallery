@@ -1,6 +1,6 @@
 import { ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Button, Divider, Empty, Result } from 'antd';
+import { App, Button, Divider, Empty, Result } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import { flattenPages, usePhotoList } from '../api/photos';
 import type { AdminStatus, Photo, Scope } from '../api/types';
@@ -27,6 +27,7 @@ interface Props {
 
 export function GalleryView({ scope, status, album, empty, selection, selectionActions }: Props) {
   const columns = useColumns();
+  const { message } = App.useApp();
   const query = usePhotoList(scope, status, true, album);
   const { data, isPending, isError, error, refetch, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } =
     query;
@@ -111,10 +112,15 @@ export function GalleryView({ scope, status, album, empty, selection, selectionA
       e.preventDefault();
       selection.start();
       selection.add(photos.map((p) => p.id));
+      const n = photos.length;
+      message.info({
+        key: 'select-all',
+        content: `${n} photo${n === 1 ? '' : 's'} selected${hasNextPage ? ' (all loaded so far; scroll down to load more)' : ' (all)'}`,
+      });
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selection, photos]);
+  }, [selection, photos, hasNextPage, message]);
 
   const viewer = viewerId !== null && (
     <PhotoViewer

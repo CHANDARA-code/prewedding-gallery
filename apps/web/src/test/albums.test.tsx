@@ -64,7 +64,7 @@ describe('albums', () => {
     await user.click(await screen.findByRole('button', { name: 'Select' }));
     await user.click(await screen.findByRole('button', { name: 'Select Photo 10' }));
     await user.click(screen.getByRole('button', { name: 'Select Photo 8' }));
-    expect(screen.getByText('2 selected')).toBeInTheDocument();
+    expect(screen.getByText('2 photos selected')).toBeInTheDocument();
     // In select mode tapping a photo selects it rather than opening the viewer.
     expect(screen.queryByRole('dialog', { name: /Photo/ })).not.toBeInTheDocument();
 

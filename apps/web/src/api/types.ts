@@ -119,7 +119,38 @@ export interface LoginResponse {
   user: User;
 }
 
-export type Scope = 'all' | 'favorite' | 'save' | 'admin' | 'album';
+export type Scope = 'all' | 'favorite' | 'save' | 'admin' | 'album' | 'share';
+
+export interface Person {
+  id: number;
+  username: string;
+}
+
+export type ShareVisibility = 'public' | 'private';
+
+/** A share link: `/s/{token}`. */
+export interface Share {
+  id: number;
+  token: string;
+  path: string;
+  title: string | null;
+  visibility: ShareVisibility;
+  photoCount: number;
+  cover: Album['cover'];
+  createdBy: Person;
+  createdAt: string;
+  expiresAt: string | null;
+  expired: boolean;
+  canManage: boolean;
+  /** Who a private link is for (only for people who can manage it). */
+  people?: Person[];
+}
+
+export interface MyShares {
+  created: Share[];
+  received: Share[];
+  others?: Share[];
+}
 export type AdminStatus = 'active' | 'deleted' | 'all';
 
 export interface ApiError {

@@ -9,6 +9,8 @@ import { AlbumPage } from './pages/AlbumPage';
 import { FavoritePage } from './pages/FavoritePage';
 import { SavePage } from './pages/SavePage';
 import { UsersPage } from './pages/UsersPage';
+import { SharePage } from './pages/SharePage';
+import { SharesPage } from './pages/SharesPage';
 
 const TABS = [
   { key: '/', label: 'All', icon: <PictureOutlined aria-hidden />, auth: false },
@@ -27,12 +29,12 @@ export function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, ready, openLogin } = useAuth();
-  // /users is reached from the account menu, not a tab, so no tab is highlighted there.
+  // /users, /shares and share links (/s/...) are not tabs, so no tab is highlighted there.
   const activeKey = location.pathname.startsWith('/albums/')
     ? '/albums'
     : TABS.some((t) => t.key === location.pathname)
       ? location.pathname
-      : location.pathname === '/users'
+      : location.pathname === '/users' || location.pathname === '/shares' || location.pathname.startsWith('/s/')
         ? ''
         : '/';
 
@@ -75,6 +77,8 @@ export function App() {
           <Route path="/favorite" element={<FavoritePage />} />
           <Route path="/save" element={<SavePage />} />
           <Route path="/users" element={<UsersPage />} />
+          <Route path="/shares" element={<SharesPage />} />
+          <Route path="/s/:token" element={<SharePage />} />
           <Route path="/photo/:id" element={<SharedPhoto />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

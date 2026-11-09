@@ -46,12 +46,12 @@ describe('select mode actions', () => {
     // Not in select mode yet: the shortcut turns it on.
     await user.keyboard('{Control>}a{/Control}');
     const bar = await screen.findByRole('toolbar', { name: 'Selected photos' });
-    expect(within(bar).getByText('5 selected')).toBeInTheDocument();
+    expect(within(bar).getByText('5 photos selected')).toBeInTheDocument();
 
     await user.click(within(bar).getByRole('button', { name: /Clear/ }));
     expect(within(bar).getByText('Tap photos to select')).toBeInTheDocument();
     await user.keyboard('{Meta>}a{/Meta}');
-    expect(within(bar).getByText('5 selected')).toBeInTheDocument();
+    expect(within(bar).getByText('5 photos selected')).toBeInTheDocument();
 
     await user.click(within(bar).getByRole('button', { name: 'Download selected' }));
     await waitFor(() => expect(clicked).toEqual(['/api/v1/photos/download.zip?ids=5,4,3,2,1']));
@@ -135,5 +135,88 @@ describe('select mode actions', () => {
       expect(JSON.parse(calls.find((c) => c.url === '/admin/photos/trash')!.data as string)).toEqual({ photoIds: [10, 8] }),
     );
     await waitFor(() => expect(screen.queryByRole('toolbar', { name: 'Selected photos' })).not.toBeInTheDocument());
+  });
+});
+
+describe('share links', () => {
+  const share = {
+    id: 3,
+    token: 'q8WcR1vX0yKp3mTz5LbN2a',
+    path: '/s/q8WcR1vX0yKp3mTz5LbN2a',
+    title: 'For Mom',
+    visibility: 'private',
+    photoCount: 2,
+    cover: null,
+    createdBy: { id: 2, username: 'demo' },
+    createdAt: '2026-11-09T08:00:00.000Z',
+    expiresAt: null,
+    expired: false,
+    canManage: true,
+    people: [{ id: 4, username: 'dara' }],
+  };
+
+  it('makes a private link from the selection for chosen people', async () => {
+    const calls = mockApi(({ method, url }) => {
+      if (url === '/auth/me') return { status: 200, data: demoUser };
+      if (url === '/photos') return { status: 200, data: page(range(10, 1), null) };
+      if (url === '/shares/people')
+        return {
+          status: 200,
+          data: [
+            { id: 4, username: 'dara' },
+            { id: 5, username: 'tithya' },
+          ],
+        };
+      if (method === 'POST' && url === '/shares') return { status: 201, data: share };
+      return { status: 404 };
+    });
+    const user = userEvent.setup();
+    renderApp('/', { token: 'tok' });
+    const bar = await selectTwo(user);
+    expect(within(bar).getByText('2 photos selected')).toBeInTheDocument();
+
+    await user.click(within(bar).getByRole('button', { name: 'Share selected as a link' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Share 2 photos' });
+    await user.click(within(dialog).getByLabelText('Title (optional)'));
+    await user.paste('For Mom');
+    await user.click(within(dialog).getByLabelText(/Only people I choose/));
+    await user.click(within(dialog).getByRole('combobox', { name: 'People' }));
+    await user.click(await screen.findByTitle('dara'));
+    await user.click(within(dialog).getByRole('button', { name: /Create link/ }));
+
+    await waitFor(() =>
+      expect(JSON.parse(calls.find((c) => c.method === 'POST' && c.url === '/shares')!.data as string)).toEqual({
+        title: 'For Mom',
+        visibility: 'private',
+        userIds: [4],
+        photoIds: [10, 8],
+        expiresInDays: null,
+      }),
+    );
+    const ready = (await screen.findByText('Your link is ready')).closest('.ant-modal') as HTMLElement;
+    expect(within(ready).getByLabelText('Share link')).toHaveValue(`${window.location.origin}/s/${share.token}`);
+    expect(within(ready).getByText(/Only dara can open it/)).toBeInTheDocument();
+  }, 90_000);
+
+  it('opens a public link for a guest, and asks to log in for a private one', async () => {
+    mockApi(({ url }) => {
+      if (url === `/shares/${share.token}`)
+        return { status: 200, data: { ...share, visibility: 'public', canManage: false, people: undefined } };
+      if (url === `/shares/${share.token}/photos`) return { status: 200, data: page([7, 3], null) };
+      return { status: 404 };
+    });
+    renderApp(`/s/${share.token}`);
+    expect(await screen.findByRole('heading', { name: 'For Mom' })).toBeInTheDocument();
+    expect(screen.getByText('Shared by demo')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Photo 7/ })).toBeInTheDocument();
+  });
+
+  it('shows a log-in prompt on a private link for guests', async () => {
+    mockApi(({ url }) =>
+      url === '/shares/AAAAAAAAAAAAAAAAAAAAAA' ? { status: 401, data: { statusCode: 401, message: 'Log in' } } : { status: 404 },
+    );
+    renderApp('/s/AAAAAAAAAAAAAAAAAAAAAA');
+    expect(await screen.findByText('Log in to see these photos')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Log in' })).toHaveLength(2); // the page's and the header's
   });
 });

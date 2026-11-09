@@ -17,6 +17,8 @@ export function endpointFor(scope: Scope, album?: string): string {
   switch (scope) {
     case 'album':
       return `/albums/${encodeURIComponent(album ?? '')}/photos`;
+    case 'share':
+      return `/shares/${encodeURIComponent(album ?? '')}/photos`;
     case 'favorite':
       return '/me/favorites';
     case 'save':
@@ -29,9 +31,9 @@ export function endpointFor(scope: Scope, album?: string): string {
 }
 
 export const photosKey = (scope: Scope, status?: AdminStatus, album?: string): QueryKey =>
-  scope === 'admin' ? ['photos', scope, status ?? 'active'] : scope === 'album' ? ['photos', scope, album] : ['photos', scope];
+  scope === 'admin' ? ['photos', scope, status ?? 'active'] : scope === 'album' || scope === 'share' ? ['photos', scope, album] : ['photos', scope];
 
-/** `album` is the album's slug (scope 'album' only). */
+/** `album` is the album's slug (scope 'album') or the link's token (scope 'share'). */
 export function usePhotoList(scope: Scope, status?: AdminStatus, enabled = true, album?: string) {
   return useInfiniteQuery({
     queryKey: photosKey(scope, status, album),
@@ -159,6 +161,7 @@ export function useSoftDelete() {
       });
       qc.invalidateQueries({ queryKey: ['photos', 'admin', 'deleted'], refetchType: 'none' });
       qc.invalidateQueries({ queryKey: ['albums'] }); // counts and covers
+      qc.invalidateQueries({ queryKey: ['shares'] });
     },
   });
 }
@@ -174,11 +177,12 @@ export function useRestore() {
         return null;
       });
       // It reappears in lists it used to be in: refetch those lazily.
-      for (const scope of ['all', 'favorite', 'save', 'album'] as const) {
+      for (const scope of ['all', 'favorite', 'save', 'album', 'share'] as const) {
         qc.invalidateQueries({ queryKey: ['photos', scope], refetchType: 'none' });
       }
       qc.invalidateQueries({ queryKey: ['photos', 'admin', 'active'], refetchType: 'none' });
       qc.invalidateQueries({ queryKey: ['albums'] });
+      qc.invalidateQueries({ queryKey: ['shares'] });
     },
   });
 }
@@ -190,6 +194,7 @@ export function useHardDelete() {
     onSuccess: (_res, photo) => {
       updateCachedPhotos(qc, (item) => (item.id === photo.id ? null : item));
       qc.invalidateQueries({ queryKey: ['albums'] });
+      qc.invalidateQueries({ queryKey: ['shares'] });
     },
   });
 }
@@ -222,7 +227,10 @@ export function useRotate() {
       api.post<Photo>(`/admin/photos/${id}/rotate`, { degrees }).then((r) => r.data),
     onSuccess: (u) => applyRotated(qc, u),
     // An album cover may be one of them.
-    onSettled: () => qc.invalidateQueries({ queryKey: ['albums'] }),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['albums'] });
+      qc.invalidateQueries({ queryKey: ['shares'] }); // covers and counts
+    },
   });
 }
 
@@ -267,7 +275,10 @@ export function useRotateMany() {
       }
       return result;
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: ['albums'] }),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['albums'] });
+      qc.invalidateQueries({ queryKey: ['shares'] }); // covers and counts
+    },
   });
 }
 
@@ -394,6 +405,7 @@ export function useAdminBatch() {
     onSuccess: (_res, { ids }) => {
       qc.invalidateQueries({ queryKey: ['photos'] });
       qc.invalidateQueries({ queryKey: ['albums'] });
+      qc.invalidateQueries({ queryKey: ['shares'] });
       for (const id of ids) qc.removeQueries({ queryKey: photoKey(id) });
     },
   });

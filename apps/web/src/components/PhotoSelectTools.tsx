@@ -13,6 +13,7 @@ import {
   HeartFilled,
   HeartOutlined,
   BookFilled,
+  LinkOutlined,
   MoreOutlined,
   RotateLeftOutlined,
   RotateRightOutlined,
@@ -34,6 +35,7 @@ import type { AlbumRef, Photo } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { useSelection, type Selection } from '../hooks/useSelection';
 import { AlbumPickerModal } from './AlbumPickerModal';
+import { ShareLinkModal } from './ShareLinkModal';
 
 /** Router state set by an album's "Add photos" button: pick photos for that album. */
 export interface SelectForState {
@@ -78,8 +80,8 @@ interface ActionsProps {
 }
 
 /**
- * Every action that works on one photo, for the whole selection: favorite, save, download (ZIP),
- * rotate, add to album, edit title/caption, export CSV, move to trash, restore and delete forever.
+ * Every action that works on one photo, for the whole selection: favorite, save, download (ZIP), share
+ * link, rotate, add to album, edit title/caption, export CSV, move to trash, restore and delete forever.
  */
 export function SelectionActions({ selected, selection, target, extra }: ActionsProps) {
   const { user, can } = useAuth();
@@ -91,6 +93,7 @@ export function SelectionActions({ selected, selection, target, extra }: Actions
   const addToAlbum = useAlbumPhotos();
   const [picking, setPicking] = useState<number[] | null>(null);
   const [editing, setEditing] = useState<number[] | null>(null);
+  const [sharing, setSharing] = useState<number[] | null>(null);
   const added = useRef(false);
 
   const ids = selected.map((p) => p.id);
@@ -225,6 +228,11 @@ export function SelectionActions({ selected, selection, target, extra }: Actions
           Download
         </Button>
       )}
+      {user && (
+        <Tooltip title="Share link (public or for chosen people)">
+          <Button className="icon-action" icon={<LinkOutlined />} aria-label="Share selected as a link" disabled={noActive} onClick={() => setSharing(activeIds)} />
+        </Tooltip>
+      )}
       {can('photos.edit') && <RotateActions ids={activeIds} />}
       {can('albums.manage') && (
         <Button
@@ -272,6 +280,7 @@ export function SelectionActions({ selected, selection, target, extra }: Actions
         />
       )}
       {editing && <BatchEditModal ids={editing} onClose={() => setEditing(null)} />}
+      {sharing && <ShareLinkModal photoIds={sharing} onClose={() => setSharing(null)} />}
     </>
   );
 }
