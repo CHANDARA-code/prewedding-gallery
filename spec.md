@@ -2,7 +2,7 @@
 
 A photo gallery for pre-wedding photos. Anyone can browse. Logged-in users can favorite and save photos. An admin can upload photos and delete them (soft or hard).
 
-- **Version:** 1.2 (adds albums; 1.1 added cursor pagination, infinite scroll, API and DB performance work)
+- **Version:** 1.3 (adds batch actions on selected photos; 1.2 added albums; 1.1 added cursor pagination, infinite scroll, API and DB performance work)
 - **Date:** 2026-11-08
 
 ---
@@ -640,3 +640,20 @@ Admin-curated sets of photos (e.g. *Barsat Angkor Wat*) that anyone can browse. 
 - **Sharing:** `/albums/:slug` is served with Open Graph tags (name, description or photo count, the cover's share card).
 - **Export:** `GET /admin/photos/export.csv?album=<id>` (combinable with `collection`); every export has an `albums` column (`Album A | Album B`).
 - **Frontend:** **Albums** tab (cover grid) → album page with Share, Export CSV and, for managers, Add photos / Select / Edit / Hide-Publish / Delete. **Select** mode on All, Favorite, Save and album pages (tap to select, shift-click for a range, Esc to finish) with a floating bar: *Add to album…* (pick or create), and in an album *Set as cover* and *Remove*. The viewer has an albums button (toggle membership) and the info panel links the photo's albums.
+
+## 12. Batch actions on a selection (v1.3)
+
+**Select** is offered to everyone on All, Albums, Favorite and Save (tap to select, shift-click for a range, *Select all shown* or Ctrl+A / ⌘A, which also turns select mode on; Esc to finish). The floating bar offers every per-photo action the account is allowed, applied to the whole selection:
+
+| Action | Who | API |
+| --- | --- | --- |
+| Download originals as ZIP | everyone | `GET /photos/download.zip?ids=1,2,3` (active photos, up to 200 per ZIP, stored not deflated, exact `Content-Length`; the web app starts one ZIP per 200) |
+| Favorite / unfavorite, save / unsave | signed in | `POST /me/favorites/batch`, `POST /me/saves/batch` `{photoIds, on}` (active photos only, idempotent) |
+| Rotate left / right | `photos.edit` | `POST /admin/photos/rotate` `{photoIds (≤24), degrees}` → `{photos, failed}`; the web app sends 8 at a time (≈1 s per photo to re-render) with a progress toast |
+| Edit title / caption | `photos.edit` | `PATCH /admin/photos` `{photoIds, title?, caption?}` (omitted keeps, `""` clears) |
+| Add to album / remove, set cover | `albums.manage` | see §11 |
+| Export CSV of the selection | `photos.export` | `GET /admin/photos/export.csv?ids=1,2,3` |
+| Move to trash / restore | `photos.delete` | `POST /admin/photos/trash`, `POST /admin/photos/restore` `{photoIds}` |
+| Delete forever | `photos.purge` | `POST /admin/photos/purge` `{photoIds}` |
+
+Batch bodies take 1–1000 ids (rotate ≤24) and return `{changed}`; unknown ids are skipped. Trash, restore and purge confirm first and end select mode; favorite, save and rotate keep the selection so a mistake is one tap to undo. Each batch sends one Telegram alert, not one per photo.

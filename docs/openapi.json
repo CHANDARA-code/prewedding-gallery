@@ -158,6 +158,48 @@
         ]
       }
     },
+    "/api/v1/photos/download.zip": {
+      "get": {
+        "description": "The original files of up to 200 active photos, streamed as one ZIP (`prewedding-<id>.<ext>` inside). Public, like single downloads.",
+        "operationId": "PhotosController_downloadZip",
+        "parameters": [
+          {
+            "name": "ids",
+            "required": true,
+            "in": "query",
+            "description": "Comma-separated ids of active photos, 1 to 200.",
+            "schema": {
+              "example": "12,9,4",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ZIP archive"
+          },
+          "404": {
+            "description": "None of the ids is an active photo",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Download several as ZIP",
+        "tags": [
+          "Photos"
+        ]
+      }
+    },
     "/api/v1/photos": {
       "get": {
         "description": "Active photos, newest first, cursor-paginated. Public; send a bearer token to also get `isFavorite` and `isSaved` flags. Guest responses are cacheable for 30 s.",
@@ -269,7 +311,7 @@
     },
     "/api/v1/admin/photos/export.csv": {
       "get": {
-        "description": "One row per photo: source zip, original file name, detail link, favorite/save counts and who favorited/saved it, then title, caption, size, dimensions, camera EXIF, uploader and dates. `collection=favorites|saves` keeps only photos someone favorited/saved (`mine=true`: only yours); `album=<id>` keeps only the photos in that album. The `albums` column lists every album a photo is in. UTF-8 with BOM (opens correctly in Excel).",
+        "description": "One row per photo: source zip, original file name, detail link, favorite/save counts and who favorited/saved it, then title, caption, size, dimensions, camera EXIF, uploader and dates. `collection=favorites|saves` keeps only photos someone favorited/saved (`mine=true`: only yours); `album=<id>` keeps only the photos in that album; `ids=1,2,3` only those photos. The `albums` column lists every album a photo is in. UTF-8 with BOM (opens correctly in Excel).",
         "operationId": "AdminPhotosController_exportCsv",
         "parameters": [
           {
@@ -319,6 +361,16 @@
             "schema": {
               "example": 3,
               "type": "number"
+            }
+          },
+          {
+            "name": "ids",
+            "required": false,
+            "in": "query",
+            "description": "Only these photo ids (comma-separated, up to 1000).",
+            "schema": {
+              "example": "12,9,4",
+              "type": "string"
             }
           }
         ],
@@ -528,6 +580,236 @@
         "tags": [
           "Admin"
         ]
+      },
+      "patch": {
+        "description": "Sets the title and/or caption of every photo in `photoIds`. A field left out is kept; an empty string clears it.",
+        "operationId": "AdminPhotosController_editMany",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchEditDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchResultDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing the permission this action needs (admins have all of them)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Edit several",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/photos/trash": {
+      "post": {
+        "description": "Soft-deletes every active photo in `photoIds` (see Soft delete).",
+        "operationId": "AdminPhotosController_trashMany",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PhotoIdsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchResultDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing the permission this action needs (admins have all of them)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Move several to trash",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/photos/restore": {
+      "post": {
+        "description": "Restores every trashed photo in `photoIds`.",
+        "operationId": "AdminPhotosController_restoreMany",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PhotoIdsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchResultDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing the permission this action needs (admins have all of them)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Restore several",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/photos/purge": {
+      "post": {
+        "description": "Hard-deletes every photo in `photoIds` (see Hard delete). Cannot be undone.",
+        "operationId": "AdminPhotosController_purgeMany",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PhotoIdsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchResultDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing the permission this action needs (admins have all of them)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Permanently delete several",
+        "tags": [
+          "Admin"
+        ]
       }
     },
     "/api/v1/admin/photos/{id}": {
@@ -667,6 +949,64 @@
           }
         ],
         "summary": "Soft delete",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/photos/rotate": {
+      "post": {
+        "description": "Rotates up to 24 photos by the same `degrees` (clockwise, relative to each one's current rotation). Unknown ids are skipped; send bigger selections in batches. The original files are never changed.",
+        "operationId": "AdminPhotosController_rotateMany",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RotatePhotosDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RotatePhotosResultDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing the permission this action needs (admins have all of them)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Rotate several",
         "tags": [
           "Admin"
         ]
@@ -948,6 +1288,54 @@
         ]
       }
     },
+    "/api/v1/me/favorites/batch": {
+      "post": {
+        "description": "`on: true` adds every active photo in `photoIds` to your favorites; `on: false` removes them. Idempotent.",
+        "operationId": "FavoritesController_batch",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionBatchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchResultDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Favorite or un-favorite several photos",
+        "tags": [
+          "Favorites"
+        ]
+      }
+    },
     "/api/v1/photos/{id}/favorite": {
       "put": {
         "description": "Idempotent: repeating it has no further effect.",
@@ -1103,6 +1491,54 @@
           }
         ],
         "summary": "List my saves",
+        "tags": [
+          "Saves"
+        ]
+      }
+    },
+    "/api/v1/me/saves/batch": {
+      "post": {
+        "description": "`on: true` adds every active photo in `photoIds` to your saves; `on: false` removes them. Idempotent.",
+        "operationId": "SavesController_batch",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionBatchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchResultDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Save or un-save several photos",
         "tags": [
           "Saves"
         ]
@@ -2446,6 +2882,71 @@
           "files"
         ]
       },
+      "BatchEditDto": {
+        "type": "object",
+        "properties": {
+          "photoIds": {
+            "example": [
+              12,
+              9,
+              4
+            ],
+            "description": "1 to 1000 photo ids",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "title": {
+            "type": "string",
+            "example": "Angkor Wat",
+            "nullable": true,
+            "description": "Omit to keep each title; empty clears it."
+          },
+          "caption": {
+            "type": "string",
+            "example": "Sunrise at the west gate",
+            "nullable": true,
+            "description": "Omit to keep each caption; empty clears it."
+          }
+        },
+        "required": [
+          "photoIds"
+        ]
+      },
+      "BatchResultDto": {
+        "type": "object",
+        "properties": {
+          "changed": {
+            "type": "number",
+            "example": 3,
+            "description": "How many photos actually changed (missing ones, or ones already in that state, are skipped)."
+          }
+        },
+        "required": [
+          "changed"
+        ]
+      },
+      "PhotoIdsDto": {
+        "type": "object",
+        "properties": {
+          "photoIds": {
+            "example": [
+              12,
+              9,
+              4
+            ],
+            "description": "1 to 1000 photo ids",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "photoIds"
+        ]
+      },
       "UpdatePhotoDto": {
         "type": "object",
         "properties": {
@@ -2460,6 +2961,60 @@
             "nullable": true
           }
         }
+      },
+      "RotatePhotosDto": {
+        "type": "object",
+        "properties": {
+          "degrees": {
+            "type": "number",
+            "enum": [
+              90,
+              -90,
+              180
+            ],
+            "example": 90,
+            "description": "Clockwise degrees; -90 rotates left."
+          },
+          "photoIds": {
+            "example": [
+              12,
+              9,
+              4
+            ],
+            "description": "1 to 24 photo ids",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "degrees",
+          "photoIds"
+        ]
+      },
+      "RotatePhotosResultDto": {
+        "type": "object",
+        "properties": {
+          "photos": {
+            "description": "The photos that were rotated, as they are now.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PhotoDto"
+            }
+          },
+          "failed": {
+            "description": "Ids whose re-render failed; those photos are unchanged.",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "photos",
+          "failed"
+        ]
       },
       "RotatePhotoDto": {
         "type": "object",
@@ -2477,6 +3032,32 @@
         },
         "required": [
           "degrees"
+        ]
+      },
+      "CollectionBatchDto": {
+        "type": "object",
+        "properties": {
+          "photoIds": {
+            "example": [
+              12,
+              9,
+              4
+            ],
+            "description": "1 to 1000 photo ids",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "on": {
+            "type": "boolean",
+            "example": true,
+            "description": "true adds them, false removes them."
+          }
+        },
+        "required": [
+          "photoIds",
+          "on"
         ]
       },
       "PermissionInfoDto": {

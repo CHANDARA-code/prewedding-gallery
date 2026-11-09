@@ -45,10 +45,10 @@ download, and an admin can grant them any of these extra permissions:
 | Permission | Allows |
 |---|---|
 | `photos.upload` | `POST /admin/photos` |
-| `photos.edit` | `PATCH /admin/photos/{id}`, `POST /admin/photos/{id}/rotate` |
-| `photos.delete` | `GET /admin/photos` (trash view), `DELETE /admin/photos/{id}`, `POST /admin/photos/{id}/restore`, opening trashed photos |
-| `photos.purge` | `DELETE /admin/photos/{id}/permanent` |
-| `photos.export` | `GET /admin/photos/export.csv` (`?status=active\|deleted\|all`, `&collection=favorites\|saves`, `&mine=true`, `&album={id}`). Columns start with `id, source_zip, original_file_name, detail_url, favorites, favorited_by, saves, saved_by, albums` |
+| `photos.edit` | `PATCH /admin/photos/{id}`, `POST /admin/photos/{id}/rotate`; batches `PATCH /admin/photos`, `POST /admin/photos/rotate` |
+| `photos.delete` | `GET /admin/photos` (trash view), `DELETE /admin/photos/{id}`, `POST /admin/photos/{id}/restore`, batches `POST /admin/photos/trash` and `/restore`, opening trashed photos |
+| `photos.purge` | `DELETE /admin/photos/{id}/permanent`, batch `POST /admin/photos/purge` |
+| `photos.export` | `GET /admin/photos/export.csv` (`?status=active\|deleted\|all`, `&collection=favorites\|saves`, `&mine=true`, `&album={id}`, `&ids=1,2,3`). Columns start with `id, source_zip, original_file_name, detail_url, favorites, favorited_by, saves, saved_by, albums` |
 | `albums.manage` | `POST /admin/albums`, `PATCH` / `DELETE /admin/albums/{id}`, `POST /admin/albums/{id}/photos` and `/photos/remove`; also sees hidden albums |
 | `users.manage` | `/admin/users/*`, **admin role only**, cannot be granted |
 
@@ -75,9 +75,9 @@ Admins cannot demote, disable or delete themselves, and the last active admin ca
 |---|:-:|:-:|:-:|
 | `POST /auth/login` | ✅ | ✅ | ✅ |
 | `GET /auth/me` | `401` | ✅ | ✅ |
-| `GET /photos`, `GET /photos/{id}` | ✅ | ✅ (with flags; deleted ones with `photos.delete`) | ✅ (can view deleted) |
+| `GET /photos`, `GET /photos/{id}`, `GET /photos/download.zip?ids=` | ✅ | ✅ (with flags; deleted ones with `photos.delete`) | ✅ (can view deleted) |
 | `GET /me/favorites`, `GET /me/saves` | `401` | ✅ | ✅ |
-| `PUT` / `DELETE /photos/{id}/favorite` and `/save` | `401` | ✅ | ✅ |
+| `PUT` / `DELETE /photos/{id}/favorite` and `/save`, `POST /me/favorites/batch` and `/me/saves/batch` | `401` | ✅ | ✅ |
 | `/admin/photos/*` | `401` | per granted permission, else `403` | ✅ |
 | `/admin/users/*` | `401` | `403` | ✅ |
 
