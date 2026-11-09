@@ -113,6 +113,11 @@ export function GalleryView({ scope, status, album, empty, selection, selectionA
 
   // Drag a box with the mouse: what was selected before the drag stays, plus everything the box touches.
   const dragBase = useRef<{ ids: ReadonlySet<number>; wasActive: boolean } | null>(null);
+  // Stable for the memoised grid: the handler itself changes with the URL (?photo=) and the list.
+  const onCardRef = useRef(onCard);
+  onCardRef.current = onCard;
+  const onCardStable = useCallback((index: number, mods: OpenModifiers) => onCardRef.current(index, mods), []);
+
   const onDragSelect = useCallback(
     (ids: number[], phase: DragPhase) => {
       if (!selection) return;
@@ -205,7 +210,7 @@ export function GalleryView({ scope, status, album, empty, selection, selectionA
         <PhotoGrid
           photos={photos}
           columns={columns}
-          onOpen={onCard}
+          onOpen={onCardStable}
           selected={selecting ? selection!.ids : undefined}
           onDragSelect={selection ? onDragSelect : undefined}
         />

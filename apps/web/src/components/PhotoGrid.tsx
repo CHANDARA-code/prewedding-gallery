@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import type { Photo } from '../api/types';
 import { useElementWidth } from '../hooks/useElementWidth';
@@ -45,7 +45,8 @@ export function layoutRows(photos: Photo[], columns: number, width: number, gap:
   return rows;
 }
 
-export function PhotoGrid({ photos, columns, onOpen, selected, onDragSelect }: Props) {
+/** Memoised: browsing in the viewer changes the URL, which must not re-render the grid behind it. */
+export const PhotoGrid = memo(function PhotoGrid({ photos, columns, onOpen, selected, onDragSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const width = useElementWidth(containerRef);
   const gap = columns <= 2 ? 6 : 10;
@@ -106,7 +107,7 @@ export function PhotoGrid({ photos, columns, onOpen, selected, onDragSelect }: P
       {drag.box && <div className="drag-box" style={drag.box} aria-hidden />}
     </div>
   );
-}
+});
 
 export function GridSkeleton({ columns, rows = 3 }: { columns: number; rows?: number }) {
   return (

@@ -1,4 +1,4 @@
-import { PointerEvent as ReactPointerEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState, WheelEvent } from 'react';
+import { PointerEvent as ReactPointerEvent, ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, WheelEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { App, Button, Dropdown, Result, Spin, Tooltip, type MenuProps } from 'antd';
 import {
@@ -158,7 +158,7 @@ export function PhotoViewer({ photos, photoId, onNavigate, onClose, hasNextPage,
 
   // Reset zoom/HD whenever the photo (or its rendering, after a rotation) changes.
   const renderKey = photo ? `${photo.id}:${viewUrl(photo)}` : '';
-  useEffect(() => {
+  useLayoutEffect(() => {
     setView(RESET);
     setHd(false);
     setHdLoaded(false);
@@ -203,23 +203,19 @@ export function PhotoViewer({ photos, photoId, onNavigate, onClose, hasNextPage,
   /* ---------- navigation: the strip of photos slides, then the next one takes over ---------- */
   const [slideX, setSlideX] = useState(0);
   const [noAnim, setNoAnim] = useState(false);
-  const sliding = useRef<number | null>(null);
-
-  const finishSlide = useCallback(
-    (target: Photo) => {
-      sliding.current = null;
-      // Same frame: the new photo becomes current exactly where its neighbour copy was, with no animation.
-      setNoAnim(true);
-      setSlideX(0);
-      onNavigate(target.id);
-      requestAnimationFrame(() => requestAnimationFrame(() => setNoAnim(false)));
-    },
-    [onNavigate],
-  );
+  /** A slide in progress: the timer that hands over to `id` once the animation has played. */
+  const sliding = useRef<{ timer: number; id: number } | null>(null);
+  /** ←/→ presses made while sliding (net steps, capped): played one after another, so none get lost. */
+  const queued = useRef(0);
+  const MAX_QUEUE = 5;
+  const goRef = useRef<(dir: 1 | -1) => void>(() => {});
 
   const go = useCallback(
     (dir: 1 | -1) => {
-      if (sliding.current !== null) return;
+      if (sliding.current) {
+        queued.current = Math.max(-MAX_QUEUE, Math.min(MAX_QUEUE, queued.current + dir));
+        return;
+      }
       const target = dir === 1 ? next : prev;
       if (!target) {
         if (dir === 1 && hasNextPage && !isFetchingNextPage) fetchNextPage();
@@ -227,16 +223,40 @@ export function PhotoViewer({ photos, photoId, onNavigate, onClose, hasNextPage,
         return;
       }
       if (!stage.width || view.scale > 1 || reducedMotion()) {
-        setSlideX(0);
         onNavigate(target.id);
         return;
       }
+      // Slide the whole strip; the photo arriving is already rendered (and decoded) beside this one.
       setSlideX(-dir * (stage.width + GAP));
-      sliding.current = window.setTimeout(() => finishSlide(target), SLIDE_ANIM_MS);
+      sliding.current = { id: target.id, timer: window.setTimeout(() => onNavigate(target.id), SLIDE_ANIM_MS) };
     },
-    [next, prev, onNavigate, hasNextPage, isFetchingNextPage, fetchNextPage, stage.width, view.scale, finishSlide],
+    [next, prev, onNavigate, hasNextPage, isFetchingNextPage, fetchNextPage, stage.width, view.scale],
   );
-  useEffect(() => () => window.clearTimeout(sliding.current ?? undefined), []);
+  goRef.current = go;
+
+  // The photo changed (slide finished, filmstrip, link...). Before the browser paints, put the strip back
+  // at rest without animating: the slide that arrived keeps its DOM node and simply becomes the centre one,
+  // so nothing is re-created, re-decoded or flashes.
+  useLayoutEffect(() => {
+    if (sliding.current) {
+      window.clearTimeout(sliding.current.timer);
+      sliding.current = null;
+    }
+    setNoAnim(true);
+    setSlideX(0);
+    const raf = requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        setNoAnim(false);
+        if (queued.current) {
+          const dir = queued.current > 0 ? 1 : -1;
+          queued.current -= dir;
+          goRef.current(dir);
+        }
+      }),
+    );
+    return () => cancelAnimationFrame(raf);
+  }, [photoId]);
+  useEffect(() => () => window.clearTimeout(sliding.current?.timer), []);
 
   useEffect(() => {
     if (index >= 0 && index >= photos.length - 4 && hasNextPage && !isFetchingNextPage) fetchNextPage();
@@ -447,7 +467,7 @@ export function PhotoViewer({ photos, photoId, onNavigate, onClose, hasNextPage,
 
   const onPointerDown = (e: ReactPointerEvent) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
-    if (sliding.current !== null) return;
+    if (sliding.current) return;
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     setInteracting(true);
@@ -611,22 +631,55 @@ export function PhotoViewer({ photos, photoId, onNavigate, onClose, hasNextPage,
     if (key === 'rotate-right') onRotate(90);
   };
 
-  const neighbour = (p: Photo | undefined, dir: 1 | -1) => {
-    if (!p) return null;
-    const size = fit(p);
+  /**
+   * One slide per photo, keyed by id: when a neighbour slides in and becomes current, React keeps its
+   * element and images, so the hand-over is invisible. Only the current slide zooms and loads the original.
+   */
+  const slide = (p: Photo, offset: -1 | 0 | 1) => {
+    const current = offset === 0;
+    const size = current ? base : fit(p);
     const s = assetUrl(viewUrl(p));
+    const ready = loaded.current.has(s);
     return (
-      <div className="viewer-slide" style={{ transform: `translateX(${dir * (stage.width + GAP)}px)` }} aria-hidden>
-        <div className="viewer-frame" style={{ width: size.w, height: size.h }}>
-          <img className="viewer-img viewer-thumb" src={assetUrl(p.thumbUrl)} alt="" draggable={false} />
+      <div
+        key={p.id}
+        className={`viewer-slide${current ? ' is-current' : ''}`}
+        style={current ? undefined : { transform: `translateX(${offset * (stage.width + GAP)}px)` }}
+        aria-hidden={current ? undefined : true}
+      >
+        <div
+          className="viewer-frame"
+          style={{
+            width: size.w,
+            height: size.h,
+            transform: current ? `translate(${view.x}px, ${view.y + dragY}px) scale(${view.scale * shrink})` : undefined,
+            transition: interacting || noAnim || !current ? 'none' : undefined,
+          }}
+        >
+          {/* Instant: the grid already cached this thumbnail. */}
+          <img key={`t:${p.thumbUrl}`} className="viewer-img viewer-thumb" src={assetUrl(p.thumbUrl)} alt="" aria-hidden draggable={false} />
           <img
-            className={`viewer-img viewer-neighbour${loaded.current.has(s) ? ' is-loaded' : ''}`}
+            key={`p:${s}`}
+            className={`viewer-img ${current ? 'viewer-preview' : 'viewer-neighbour'}${ready ? ' is-loaded' : ''}`}
             src={s}
-            alt=""
+            alt={current ? p.caption || p.title || `Photo ${p.id}` : ''}
             draggable={false}
             decoding="async"
             onLoad={() => markLoaded(s)}
           />
+          {current && hd && (
+            <img
+              key={`o:${p.url}:${p.rotation ?? 0}`}
+              className={`viewer-img viewer-original${hdLoaded ? ' is-loaded' : ''}`}
+              style={originalStyle(p.rotation ?? 0, base)}
+              src={assetUrl(p.url)}
+              alt=""
+              aria-hidden
+              draggable={false}
+              decoding="async"
+              onLoad={() => setHdLoaded(true)}
+            />
+          )}
         </div>
       </div>
     );
@@ -674,44 +727,9 @@ export function PhotoViewer({ photos, photoId, onNavigate, onClose, hasNextPage,
                 className="viewer-track"
                 style={{ transform: `translateX(${trackX}px)`, transition: interacting || noAnim ? 'none' : undefined }}
               >
-                {neighbour(prev, -1)}
-                <div className="viewer-slide is-current">
-                  <div
-                    className="viewer-frame"
-                    style={{
-                      width: base.w,
-                      height: base.h,
-                      transform: `translate(${view.x}px, ${view.y + dragY}px) scale(${view.scale * shrink})`,
-                      transition: interacting || noAnim ? 'none' : undefined,
-                    }}
-                  >
-                    {/* Instant: the grid already cached this thumbnail. */}
-                    <img key={`t:${photo.id}:${photo.thumbUrl}`} className="viewer-img viewer-thumb" src={assetUrl(photo.thumbUrl)} alt="" aria-hidden draggable={false} />
-                    <img
-                      key={`p:${renderKey}`}
-                      className={`viewer-img viewer-preview${previewLoaded ? ' is-loaded' : ''}`}
-                      src={src}
-                      alt={photo.caption || photo.title || `Photo ${photo.id}`}
-                      draggable={false}
-                      decoding="async"
-                      onLoad={() => markLoaded(src)}
-                    />
-                    {hd && (
-                      <img
-                        key={`o:${photo.id}:${photo.url}:${photo.rotation ?? 0}`}
-                        className={`viewer-img viewer-original${hdLoaded ? ' is-loaded' : ''}`}
-                        style={originalStyle(photo.rotation ?? 0, base)}
-                        src={assetUrl(photo.url)}
-                        alt=""
-                        aria-hidden
-                        draggable={false}
-                        decoding="async"
-                        onLoad={() => setHdLoaded(true)}
-                      />
-                    )}
-                  </div>
-                </div>
-                {neighbour(next, 1)}
+                {prev && slide(prev, -1)}
+                {slide(photo, 0)}
+                {next && slide(next, 1)}
               </div>
             )}
           </div>
