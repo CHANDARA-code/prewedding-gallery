@@ -232,23 +232,29 @@ export class PhotosService {
     }
   }
 
-  /** Active photos for a ZIP download, in the order asked, with their original file paths. */
+  /**
+   * Active photos for a ZIP download, in the order asked, with their original file paths. Each is named
+   * after the uploader's file (e.g. 361A8184.jpg), falling back to prewedding-<id>.<ext>; clashes (compared
+   * case-insensitively, as on Windows and macOS) get " (2)", " (3)"... before the extension.
+   */
   downloadable(ids: number[]): { id: number; path: string; name: string }[] {
     const unique = [...new Set(ids)];
     const rows = chunks(unique).flatMap((chunk) =>
       this.db
-        .select({ id: photos.id, filename: photos.filename })
+        .select({ id: photos.id, filename: photos.filename, originalName: photos.originalName })
         .from(photos)
         .where(and(inArray(photos.id, chunk), isNull(photos.deletedAt)))
         .all(),
     );
     const byId = new Map(rows.map((r) => [r.id, r]));
+    const taken = new Set<string>();
     return unique
       .filter((id) => byId.has(id))
       .map((id) => {
-        const { filename } = byId.get(id)!;
+        const { filename, originalName } = byId.get(id)!;
         const ext = filename.split('.').pop() ?? 'jpg';
-        return { id, path: this.storage.originalPath(filename), name: `prewedding-${id}.${ext}` };
+        const name = uniqueName(zipEntryName(originalName, ext) ?? `prewedding-${id}.${ext}`, taken);
+        return { id, path: this.storage.originalPath(filename), name };
       });
   }
 
@@ -335,4 +341,26 @@ export class PhotosService {
   countActive(): number {
     return this.db.select({ n: count() }).from(photos).where(isNull(photos.deletedAt)).get()?.n ?? 0;
   }
+}
+
+/** A safe ZIP entry name from the uploader's file name, with the stored extension when it has none. */
+function zipEntryName(original: string | null, ext: string): string | null {
+  const n = original
+    ?.split(/[\\/]/)
+    .pop()!
+    .replace(/[\u0000-\u001f\u007f:*?"<>|]/g, '_')
+    .trim()
+    .replace(/^\.+/, '');
+  if (!n) return null;
+  return /\.[^.]+$/.test(n) ? n : `${n}.${ext}`;
+}
+
+/** `name`, or `name (2).ext`, `name (3).ext`... whichever isn't in `taken` yet; records the result. */
+function uniqueName(name: string, taken: Set<string>): string {
+  const dot = name.lastIndexOf('.');
+  const [base, ext] = dot > 0 ? [name.slice(0, dot), name.slice(dot)] : [name, ''];
+  let candidate = name;
+  for (let i = 2; taken.has(candidate.toLowerCase()); i++) candidate = `${base} (${i})${ext}`;
+  taken.add(candidate.toLowerCase());
+  return candidate;
 }

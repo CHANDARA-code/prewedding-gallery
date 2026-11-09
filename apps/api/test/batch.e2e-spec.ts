@@ -125,7 +125,7 @@ describe('ZIP download', () => {
     expect(res.headers['content-disposition']).toMatch(/filename="prewedding-2-photos-/);
 
     const files = unzip(body);
-    expect(files.map((f) => f.name)).toEqual([`prewedding-${b}.jpg`, `prewedding-${a}.jpg`]);
+    expect(files.map((f) => f.name)).toEqual(['p1.jpg', 'p0.jpg']); // the uploaders' file names
     const original = (await ctx.http.get(`${api}/photos/${a}`).expect(200)).body.url as string;
     const raw = await ctx.http.get(original).buffer(true).parse((r, cb) => {
       const parts: Buffer[] = [];
@@ -133,6 +133,19 @@ describe('ZIP download', () => {
       r.on('end', () => cb(null, Buffer.concat(parts)));
     });
     expect(files[1].data.equals(raw.body as Buffer)).toBe(true);
+
+    // Same original name twice: the second gets a suffix so neither is overwritten on extract.
+    const [d] = await uploadPhotos(ctx, 1);
+    const clash = await ctx.http
+      .get(`${api}/photos/download.zip?ids=${a},${d}`)
+      .buffer(true)
+      .parse((r, cb) => {
+        const parts: Buffer[] = [];
+        r.on('data', (x: Buffer) => parts.push(x));
+        r.on('end', () => cb(null, Buffer.concat(parts)));
+      })
+      .expect(200);
+    expect(unzip(clash.body as Buffer).map((f) => f.name)).toEqual(['p0.jpg', 'p0 (2).jpg']);
 
     await ctx.http.get(`${api}/photos/download.zip?ids=${c}`).expect(404); // only trashed
     await ctx.http.get(`${api}/photos/download.zip`).expect(400);

@@ -44,7 +44,7 @@ export class PhotosController {
   @Get('download.zip')
   @ApiOperation({
     summary: 'Download several as ZIP',
-    description: 'The original files of up to 200 active photos, streamed as one ZIP (`prewedding-<id>.<ext>` inside). Public, like single downloads.',
+    description: 'The original files of up to 200 active photos, streamed as one ZIP (each named after its original file, e.g. `361A8184.jpg`, or `prewedding-<id>.<ext>` if unknown; clashing names get ` (2)`, ` (3)`…). Public, like single downloads.',
   })
   @ApiProduces('application/zip')
   @ApiResponse({ status: 200, description: 'ZIP archive' })
