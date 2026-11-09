@@ -143,7 +143,9 @@ export function setupApp(app: NestExpressApplication, config: AppConfig) {
           if (coverRow) og.image = cardOf(coverRow);
         }
         if (!og.image) {
-          const cover = repo.listPublic(null, null, 1)[0]; // newest photo as the gallery's cover
+          // The site's card: the chosen cover photo (SITE_COVER_PHOTO_ID), else the newest photo.
+          const chosen = config.siteCoverPhotoId ? repo.findById(config.siteCoverPhotoId, null) : undefined;
+          const cover = chosen && !chosen.deletedAt ? chosen : repo.listPublic(null, null, 1)[0];
           if (cover) og.image = cardOf(cover);
         }
         const html = og.image ? injectOgTags(readIndex(), og) : readIndex();

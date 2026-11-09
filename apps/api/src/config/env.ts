@@ -20,6 +20,8 @@ export interface AppConfig {
   webDistDir?: string;
   /** Absolute site URL for share links and og:image, e.g. https://prewedding.leavchandara.com */
   publicUrl?: string;
+  /** Photo whose share card represents the whole site (home page and pages without their own image). */
+  siteCoverPhotoId?: number;
   telegramBotToken?: string;
   telegramChatId?: string;
   alertEvents: Set<string>;
@@ -80,6 +82,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     trustProxy,
     webDistDir: env.WEB_DIST_DIR || undefined,
     publicUrl: env.PUBLIC_URL?.replace(/\/+$/, '') || undefined,
+    siteCoverPhotoId: /^\d+$/.test(env.SITE_COVER_PHOTO_ID ?? '') ? Number(env.SITE_COVER_PHOTO_ID) : undefined,
     telegramBotToken: env.TELEGRAM_BOT_TOKEN || undefined,
     telegramChatId: env.TELEGRAM_CHAT_ID || undefined,
     alertEvents,
