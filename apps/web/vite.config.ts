@@ -30,6 +30,7 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     css: false,
-    testTimeout: 30_000,
+    // Whole-app tests (jsdom + antd) take 20-30 s each on this shared server when files run in parallel.
+    testTimeout: 60_000,
   },
 });

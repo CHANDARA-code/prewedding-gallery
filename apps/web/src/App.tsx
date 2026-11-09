@@ -70,6 +70,8 @@ export function App() {
         />
       </nav>
       <main className="content">
+        {/* Keyed by path: each page settles in (200ms fade-up) instead of teleporting; ?photo= changes don't count. */}
+        <div key={location.pathname} className="route-fade">
         <Routes>
           <Route path="/" element={<AllPage />} />
           <Route path="/albums" element={<AlbumsPage />} />
@@ -82,6 +84,7 @@ export function App() {
           <Route path="/photo/:id" element={<SharedPhoto />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </div>
       </main>
     </div>
   );

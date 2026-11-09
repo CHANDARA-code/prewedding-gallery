@@ -8,6 +8,12 @@
   --card-bg: #efe6e3;
   --header-h: 60px;
   --gutter: 12px;
+  /* Motion tokens (Emil Kowalski's curves, .claude/skills/animate). UI motion stays under 300ms. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --press: 160ms;
+  --enter: 200ms;
 }
 
 *,
@@ -191,7 +197,9 @@ body.is-drag-selecting * {
   border-radius: 10px;
   background: var(--card-bg);
   box-shadow: 0 1px 2px rgba(61, 44, 51, 0.06);
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  transition:
+    box-shadow 200ms ease,
+    transform var(--press) var(--ease-out);
 }
 .photo-open {
   display: block;
@@ -948,7 +956,9 @@ body:has(.viewer) .ant-float-btn {
   cursor: pointer;
 }
 .photo-card.is-selectable img {
-  transition: transform 0.15s ease;
+  transition:
+    opacity var(--enter) var(--ease-out),
+    transform var(--press) var(--ease-out);
 }
 .photo-card.is-selected {
   box-shadow: 0 0 0 3px var(--rose);
@@ -1104,7 +1114,9 @@ body:has(.selection-bar) .content {
   border-radius: 12px;
   background: linear-gradient(135deg, #f4e9ec, #ece2df);
   box-shadow: 0 1px 2px rgba(61, 44, 51, 0.06), 6px 6px 0 -2px var(--card-bg);
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  transition:
+    box-shadow 200ms ease,
+    transform var(--press) var(--ease-out);
 }
 .album-cover img {
   width: 100%;
@@ -1581,4 +1593,150 @@ body:has(.selection-bar) .content {
 .share-row-actions {
   display: flex;
   flex: none;
+}
+
+/* ---------- motion: small, fast touches everywhere (see .claude/skills) ---------- */
+
+/* Feedback: every pressable thing gives a little under the finger. */
+body .ant-btn {
+  transition:
+    color 200ms ease,
+    background-color 200ms ease,
+    border-color 200ms ease,
+    box-shadow 200ms ease,
+    opacity 200ms ease,
+    transform var(--press) var(--ease-out);
+}
+body .ant-btn:not(:disabled):active,
+.viewer-btn.ant-btn:not(:disabled):active,
+.viewer-action:not(:disabled):active,
+.select-hover:active,
+.share-row-actions .ant-btn:active {
+  transform: scale(0.97);
+}
+.photo-card:active,
+.album-card:active,
+.share-row-main:active {
+  transform: scale(0.985);
+}
+.share-row-main,
+.viewer-action {
+  transition: transform var(--press) var(--ease-out);
+}
+
+/* Navigation: page content settles in instead of teleporting. */
+.route-fade {
+  animation: fade-up var(--enter) var(--ease-out) both;
+}
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+/* Thumbnails fade in when they arrive from the network (cached ones show at once). */
+.photo-open img {
+  opacity: 0;
+  transition:
+    opacity var(--enter) var(--ease-out),
+    transform var(--press) var(--ease-out);
+}
+.photo-card.is-ready .photo-open img {
+  opacity: 1;
+}
+
+/* Group entrances after a wait (skeleton → photos, Albums, Shared links): 40ms stagger, never blocks clicks. */
+.photo-grid.is-entering .photo-card {
+  animation: fade-up-8 260ms var(--ease-out) both;
+  animation-delay: calc(min(var(--row, 0), 6) * 40ms);
+}
+.album-grid > li,
+.share-list > li {
+  animation: fade-up-8 260ms var(--ease-out) both;
+}
+.album-grid > li:nth-child(2),
+.share-list > li:nth-child(2) {
+  animation-delay: 40ms;
+}
+.album-grid > li:nth-child(3),
+.share-list > li:nth-child(3) {
+  animation-delay: 80ms;
+}
+.album-grid > li:nth-child(4),
+.share-list > li:nth-child(4) {
+  animation-delay: 120ms;
+}
+.album-grid > li:nth-child(5),
+.share-list > li:nth-child(5) {
+  animation-delay: 160ms;
+}
+.album-grid > li:nth-child(n + 6),
+.share-list > li:nth-child(n + 6) {
+  animation-delay: 200ms;
+}
+@keyframes fade-up-8 {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* Empty and status states (rare): a gentle settle. */
+.center-state,
+.ant-empty,
+.ant-result {
+  animation: fade-up var(--enter) var(--ease-out) both;
+}
+
+/* Selection bar comes up from the bottom edge and leaves the same way. */
+.selection-bar {
+  animation: bar-in 260ms var(--ease-drawer) both;
+}
+.selection-bar.is-leaving {
+  animation: bar-out 180ms var(--ease-out) both;
+  pointer-events: none;
+}
+@keyframes bar-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(100% + 16px));
+  }
+}
+@keyframes bar-out {
+  to {
+    opacity: 0;
+    transform: translate(-50%, calc(100% + 16px));
+  }
+}
+
+/* State: the selected check and an on heart pop into place. */
+.photo-card.is-selected .select-check .anticon {
+  animation: check-in var(--press) var(--ease-out) both;
+}
+@keyframes check-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+.action-btn.is-on .anticon {
+  animation: viewer-pop 0.3s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+/* The viewer zooms out of the clicked thumbnail (JS); its generic entrance only runs without one. */
+.viewer.is-flip .viewer-stage {
+  animation: none;
+}
+.viewer.is-leaving .viewer-backdrop,
+.viewer.is-leaving .viewer-bar,
+.viewer.is-leaving .viewer-bottom,
+.viewer.is-leaving .viewer-nav,
+.viewer.is-leaving .viewer-info,
+.viewer.is-leaving .viewer-slide:not(.is-current) {
+  opacity: 0;
+  transition: opacity 200ms var(--ease-out);
+}
+.viewer.is-leaving {
+  pointer-events: none;
 }

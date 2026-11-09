@@ -1,4 +1,4 @@
-import { memo, MouseEvent, useState } from 'react';
+import { memo, MouseEvent, useCallback, useState } from 'react';
 import { App, Button, Dropdown, Form, Input, Modal, Popconfirm, Tag, Tooltip } from 'antd';
 import type { MenuProps } from 'antd';
 import {
@@ -49,6 +49,11 @@ function PhotoCardInner({ photo, width, height, priority, onOpen, selectable, se
   const toggleFavorite = useToggle('favorite');
   const toggleSave = useToggle('save');
   const [failed, setFailed] = useState(false);
+  // Fade in only what comes from the network: an already-cached thumbnail is marked ready before paint.
+  const [ready, setReady] = useState(false);
+  const imgRef = useCallback((el: HTMLImageElement | null) => {
+    if (el?.complete && el.naturalWidth > 0) setReady(true);
+  }, []);
   const deleted = Boolean(photo.deletedAt);
   const label = photo.title || `Photo ${photo.id}`;
 
@@ -72,9 +77,10 @@ function PhotoCardInner({ photo, width, height, priority, onOpen, selectable, se
 
   return (
     <div
-      className={`photo-card${deleted ? ' is-deleted' : ''}${selectMode ? ' is-selectable' : ''}${selected ? ' is-selected' : ''}`}
+      className={`photo-card${deleted ? ' is-deleted' : ''}${selectMode ? ' is-selectable' : ''}${selected ? ' is-selected' : ''}${ready || failed ? ' is-ready' : ''}`}
       style={{ width, height }}
       data-testid="photo-card"
+      data-photo-id={photo.id}
     >
       <button
         type="button"
@@ -89,6 +95,8 @@ function PhotoCardInner({ photo, width, height, priority, onOpen, selectable, se
           </span>
         ) : (
           <img
+            ref={imgRef}
+            onLoad={() => setReady(true)}
             src={assetUrl(photo.thumbUrl)}
             alt={photo.caption || label}
             width={photo.width}

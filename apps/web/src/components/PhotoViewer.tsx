@@ -71,6 +71,25 @@ const readInfoPref = () => {
 };
 
 const reducedMotion = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+/** `--ease-out` in styles.css: strong ease-out for things entering and leaving. */
+const EASE_OUT = 'cubic-bezier(0.23, 1, 0.32, 1)';
+const OPEN_MS = 300;
+const CLOSE_MS = 240;
+
+/** The grid thumbnail of a photo, if it is on screen (the viewer grows out of it and shrinks back into it). */
+function visibleThumb(id: number): { el: HTMLImageElement; r: DOMRect } | null {
+  const el = document.querySelector<HTMLImageElement>(`.photo-grid [data-photo-id="${id}"] .photo-open img`);
+  const r = el?.getBoundingClientRect();
+  if (!el || !r || r.width < 8 || r.bottom <= 0 || r.top >= window.innerHeight || r.right <= 0 || r.left >= window.innerWidth) return null;
+  return { el, r };
+}
+
+/** Transform that puts a centred box of `w` x `h` over `target` (uniform scale, centres aligned). */
+function boxOnto(target: DOMRect, center: { x: number; y: number }, w: number): string {
+  const s = target.width / w;
+  return `translate(${target.left + target.width / 2 - center.x}px, ${target.top + target.height / 2 - center.y}px) scale(${s})`;
+}
 const canFullscreen = () => typeof document !== 'undefined' && !!document.documentElement.requestFullscreen;
 
 /** "6 Nov 2026, 16:44" when the camera recorded it, else the upload day. */
@@ -137,6 +156,18 @@ export function PhotoViewer({ photos, photoId, onNavigate, onClose, hasNextPage,
   const [moreOpen, setMoreOpen] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
 
+  /* ---------- open / close: grow out of the grid thumbnail and shrink back into it ---------- */
+  // Measured before the viewer covers the grid. Null (link, scrolled away, reduced motion): a plain fade.
+  const [flipFrom] = useState(() => (reducedMotion() ? null : visibleThumb(photoId)));
+  const [leaving, setLeaving] = useState(false);
+  const hidden = useRef<HTMLImageElement | null>(null);
+  const hideThumb = (el: HTMLImageElement | null) => {
+    if (hidden.current && hidden.current !== el) hidden.current.style.visibility = '';
+    hidden.current = el;
+    if (el) el.style.visibility = 'hidden';
+  };
+  useEffect(() => () => hideThumb(null), []);
+
   const rootRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
@@ -195,6 +226,21 @@ export function PhotoViewer({ photos, photoId, onNavigate, onClose, hasNextPage,
       }),
     [clamp],
   );
+
+  const opened = useRef(false);
+  useLayoutEffect(() => {
+    if (!flipFrom || opened.current || !base.w) return;
+    opened.current = true;
+    const frame = rootRef.current?.querySelector<HTMLElement>('.viewer-slide.is-current .viewer-frame');
+    if (!frame || typeof frame.animate !== 'function') return;
+    const to = frame.getBoundingClientRect();
+    hideThumb(flipFrom.el);
+    const a = frame.animate(
+      [{ transform: boxOnto(flipFrom.r, { x: to.left + to.width / 2, y: to.top + to.height / 2 }, to.width) }, { transform: 'none' }],
+      { duration: OPEN_MS, easing: EASE_OUT },
+    );
+    a.finished.catch(() => undefined).finally(() => hideThumb(null));
+  }, [flipFrom, base.w]);
 
   useEffect(() => {
     if (view.scale >= HD_SCALE && photo && photo.previewUrl && photo.previewUrl !== photo.url) setHd(true);
@@ -414,6 +460,36 @@ export function PhotoViewer({ photos, photoId, onNavigate, onClose, hasNextPage,
     a.remove();
   }, [photo]);
 
+  /** Close with the photo shrinking back into its thumbnail (or a quick fade when it has none on screen). */
+  const close = useCallback(() => {
+    if (leaving) return;
+    const root = rootRef.current;
+    const frame = root?.querySelector<HTMLElement>('.viewer-slide.is-current .viewer-frame');
+    if (!root || !frame || typeof frame.animate !== 'function' || reducedMotion()) {
+      onClose();
+      return;
+    }
+    setLeaving(true);
+    const thumb = view.scale <= 1 ? visibleThumb(photoId) : null;
+    let anim: Animation;
+    if (thumb) {
+      // From wherever the frame is now (mid-swipe included) to the thumbnail's box.
+      const slide = frame.parentElement!.getBoundingClientRect();
+      const from = getComputedStyle(frame).transform;
+      hideThumb(thumb.el);
+      anim = frame.animate(
+        [{ transform: from === 'none' ? 'none' : from }, { transform: boxOnto(thumb.r, { x: slide.left + slide.width / 2, y: slide.top + slide.height / 2 }, frame.offsetWidth) }],
+        { duration: CLOSE_MS, easing: EASE_OUT, fill: 'forwards' },
+      );
+    } else {
+      anim = root.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 180, easing: EASE_OUT, fill: 'forwards' });
+    }
+    anim.finished.catch(() => undefined).finally(() => {
+      hideThumb(null);
+      onClose();
+    });
+  }, [leaving, onClose, photoId, view.scale]);
+
   /* ---------- keyboard ---------- */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -424,7 +500,7 @@ export function PhotoViewer({ photos, photoId, onNavigate, onClose, hasNextPage,
       const keys: Record<string, () => void> = {
         ArrowRight: () => go(1),
         ArrowLeft: () => go(-1),
-        Escape: () => (document.fullscreenElement ? undefined : onClose()),
+        Escape: () => (document.fullscreenElement ? undefined : close()),
         '+': () => zoomAt(view.scale * 1.5),
         '=': () => zoomAt(view.scale * 1.5),
         '-': () => zoomAt(view.scale / 1.5),
@@ -443,7 +519,7 @@ export function PhotoViewer({ photos, photoId, onNavigate, onClose, hasNextPage,
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [go, onClose, zoomAt, view.scale, toggleInfo, toggleFullscreen, download, busyOverlay]);
+  }, [go, close, zoomAt, view.scale, toggleInfo, toggleFullscreen, download, busyOverlay]);
 
   /* ---------- pointer gestures: pan, pinch, swipe (left/right/up/down), double-tap ---------- */
   const pointers = useRef(new Map<number, { x: number; y: number }>());
@@ -545,7 +621,7 @@ export function PhotoViewer({ photos, photoId, onNavigate, onClose, hasNextPage,
         setInfo(true);
       } else if (!horizontal && dy > 110) {
         if (infoOpen && mobile) setInfo(false);
-        else onClose();
+        else close();
       }
       return;
     }
@@ -688,7 +764,7 @@ export function PhotoViewer({ photos, photoId, onNavigate, onClose, hasNextPage,
   const body = (
     <div
       ref={rootRef}
-      className={`viewer${showChrome ? '' : ' viewer-chrome-hidden'}${infoOpen ? ' viewer-info-open' : ''}${mobile ? ' is-mobile' : ''}`}
+      className={`viewer${showChrome ? '' : ' viewer-chrome-hidden'}${infoOpen ? ' viewer-info-open' : ''}${mobile ? ' is-mobile' : ''}${flipFrom ? ' is-flip' : ''}${leaving ? ' is-leaving' : ''}`}
       role="dialog"
       aria-modal="true"
       aria-label={photo ? `Photo ${photo.title ?? photo.id}` : 'Photo viewer'}
@@ -702,7 +778,7 @@ export function PhotoViewer({ photos, photoId, onNavigate, onClose, hasNextPage,
         }
       }}
     >
-      <div className="viewer-backdrop" style={{ opacity: 1 - Math.min(0.7, closing / 350) }} />
+      <div className="viewer-backdrop" style={{ opacity: leaving ? 0 : 1 - Math.min(0.7, closing / 350) }} />
 
       <div className="viewer-main">
         <div className="viewer-canvas">
@@ -752,7 +828,7 @@ export function PhotoViewer({ photos, photoId, onNavigate, onClose, hasNextPage,
 
           <header className="viewer-bar" {...controlsHover}>
             <Tooltip title="Close (Esc)">
-              <Button ref={closeRef} type="text" className="viewer-btn" aria-label="Close viewer" icon={<ArrowLeftOutlined />} onClick={onClose} />
+              <Button ref={closeRef} type="text" className="viewer-btn" aria-label="Close viewer" icon={<ArrowLeftOutlined />} onClick={close} />
             </Tooltip>
             <div className="viewer-title">
               {photo?.title && <span className="viewer-name">{photo.title}</span>}

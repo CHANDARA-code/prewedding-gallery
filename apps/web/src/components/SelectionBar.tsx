@@ -5,7 +5,18 @@ import type { Photo } from '../api/types';
 import type { Selection } from '../hooks/useSelection';
 
 /** Floating bar shown in select mode: count, select-all / clear, the page's actions, and Done (Esc). */
-export function SelectionBar({ selection, photos, children }: { selection: Selection; photos: Photo[]; children?: ReactNode }) {
+export function SelectionBar({
+  selection,
+  photos,
+  children,
+  leaving,
+}: {
+  selection: Selection;
+  photos: Photo[];
+  children?: ReactNode;
+  /** Select mode just ended: this is the bar's last frame sliding away. */
+  leaving?: boolean;
+}) {
   const n = selection.ids.size;
   const allLoaded = photos.length > 0 && photos.every((p) => selection.ids.has(p.id));
   const mouse = typeof window !== 'undefined' && !!window.matchMedia?.('(hover: hover) and (pointer: fine)').matches;
@@ -15,12 +26,18 @@ export function SelectionBar({ selection, photos, children }: { selection: Selec
       // The photo viewer and modals handle their own Escape.
       if (e.key === 'Escape' && !document.querySelector('.viewer, .ant-modal-wrap')) selection.stop();
     };
+    if (leaving) return;
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selection]);
+  }, [selection, leaving]);
 
   return (
-    <div className="selection-bar" role="toolbar" aria-label="Selected photos">
+    <div
+      className={`selection-bar${leaving ? ' is-leaving' : ''}`}
+      role="toolbar"
+      aria-label="Selected photos"
+      aria-hidden={leaving || undefined}
+    >
       <span className="selection-count" aria-live="polite">
         {n === 0 ? (mouse ? 'Click photos or drag across them' : 'Tap photos to select') : `${n} photo${n === 1 ? '' : 's'} selected`}
       </span>

@@ -14,6 +14,8 @@ interface Props {
   selected?: ReadonlySet<number>;
   /** The page supports selecting: cards show a check on hover, and dragging with the mouse draws a selection box. */
   onDragSelect?: (ids: number[], phase: DragPhase) => void;
+  /** The first photos just replaced the skeleton: rows fade up with a short stagger. */
+  entering?: boolean;
 }
 
 const FALLBACK_ASPECT = 1.5;
@@ -46,7 +48,7 @@ export function layoutRows(photos: Photo[], columns: number, width: number, gap:
 }
 
 /** Memoised: browsing in the viewer changes the URL, which must not re-render the grid behind it. */
-export const PhotoGrid = memo(function PhotoGrid({ photos, columns, onOpen, selected, onDragSelect }: Props) {
+export const PhotoGrid = memo(function PhotoGrid({ photos, columns, onOpen, selected, onDragSelect, entering }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const width = useElementWidth(containerRef);
   const gap = columns <= 2 ? 6 : 10;
@@ -74,7 +76,13 @@ export const PhotoGrid = memo(function PhotoGrid({ photos, columns, onOpen, sele
   }, [virtualizer, rows]);
 
   return (
-    <div ref={containerRef} className="photo-grid" role="list" aria-label="Photos" onPointerDown={drag.onPointerDown}>
+    <div
+      ref={containerRef}
+      className={`photo-grid${entering ? ' is-entering' : ''}`}
+      role="list"
+      aria-label="Photos"
+      onPointerDown={drag.onPointerDown}
+    >
       <div style={{ height: virtualizer.getTotalSize(), position: 'relative', width: '100%' }}>
         {virtualizer.getVirtualItems().map((v) => {
           const row = rows[v.index];
@@ -84,7 +92,7 @@ export const PhotoGrid = memo(function PhotoGrid({ photos, columns, onOpen, sele
               key={v.key}
               className="photo-row"
               role="presentation"
-              style={{ transform: `translateY(${v.start - scrollMargin}px)`, gap, height: row.height }}
+              style={{ transform: `translateY(${v.start - scrollMargin}px)`, gap, height: row.height, ['--row' as string]: v.index }}
             >
               {row.photos.map((photo, i) => (
                 <div role="listitem" key={photo.id} style={{ width: row.widths[i], height: row.height }}>

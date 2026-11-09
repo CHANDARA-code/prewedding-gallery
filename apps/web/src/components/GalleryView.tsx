@@ -1,4 +1,4 @@
-import { ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
+import { cloneElement, ReactElement, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { App, Button, Divider, Empty, Result } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
@@ -87,6 +87,18 @@ export function GalleryView({ scope, status, album, empty, selection, selectionA
     pushedViewer.current = false;
   }, [navigate, setPhotoParam]);
 
+  // The first photos replacing the skeleton fade up (staggered); later pages and cached revisits don't.
+  const sawSkeleton = useRef(isPending);
+  const [entering, setEntering] = useState(false);
+  const enterTimer = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (!sawSkeleton.current || isPending || photos.length === 0) return;
+    sawSkeleton.current = false;
+    setEntering(true);
+    enterTimer.current = window.setTimeout(() => setEntering(false), 900);
+  }, [isPending, photos.length]);
+  useEffect(() => () => window.clearTimeout(enterTimer.current), []);
+
   const selecting = Boolean(selection?.active);
   const anchor = useRef<number | null>(null);
   useEffect(() => {
@@ -171,16 +183,33 @@ export function GalleryView({ scope, status, album, empty, selection, selectionA
     />
   );
 
+  // The selection bar slides away on exit: its last frame stays mounted for the 180ms the animation takes.
+  const activeBar = selection?.active ? (
+    <SelectionBar selection={selection} photos={photos}>
+      {selectionActions?.(photos.filter((p) => selection.ids.has(p.id)))}
+    </SelectionBar>
+  ) : null;
+  const lastBar = useRef<ReactElement | null>(null);
+  const [, barGone] = useState(0);
+  if (activeBar) lastBar.current = activeBar;
+  // Decided during render (not in an effect), so the bar never disappears for a frame before leaving.
+  const barLeaving = !activeBar && lastBar.current !== null;
+  useEffect(() => {
+    if (!barLeaving) return;
+    const t = window.setTimeout(() => {
+      lastBar.current = null;
+      barGone((n) => n + 1);
+    }, 180);
+    return () => window.clearTimeout(t);
+  }, [barLeaving]);
+  const selectionBar = activeBar ?? (barLeaving ? cloneElement(lastBar.current!, { leaving: true }) : null);
+
   // The viewer always renders at the same tree position, so it keeps its state while the list loads.
   return (
     <>
       {renderContent()}
       {viewer}
-      {selection?.active && (
-        <SelectionBar selection={selection} photos={photos}>
-          {selectionActions?.(photos.filter((p) => selection.ids.has(p.id)))}
-        </SelectionBar>
-      )}
+      {selectionBar}
     </>
   );
 
@@ -213,6 +242,7 @@ export function GalleryView({ scope, status, album, empty, selection, selectionA
           onOpen={onCardStable}
           selected={selecting ? selection!.ids : undefined}
           onDragSelect={selection ? onDragSelect : undefined}
+          entering={entering}
         />
 
         {isFetchingNextPage && <GridSkeleton columns={columns} rows={1} />}
