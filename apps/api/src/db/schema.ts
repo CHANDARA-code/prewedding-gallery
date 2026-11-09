@@ -107,7 +107,48 @@ export const albumPhotos = sqliteTable(
   ],
 );
 
+/**
+ * Share links: a hand-picked set of photos behind an unguessable token (`/s/:token`). `public` links
+ * open for anyone who has them; `private` ones only for the listed accounts (plus the creator and admins).
+ */
+export const shares = sqliteTable(
+  'shares',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    token: text('token').notNull().unique(),
+    title: text('title'),
+    visibility: text('visibility', { enum: ['public', 'private'] }).notNull().default('public'),
+    createdBy: integer('created_by').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    expiresAt: integer('expires_at', { mode: 'timestamp' }), // NULL = never
+  },
+  (t) => [index('shares_created_by_idx').on(t.createdBy, t.id)],
+);
+
+export const sharePhotos = sqliteTable(
+  'share_photos',
+  {
+    shareId: integer('share_id').notNull().references(() => shares.id, { onDelete: 'cascade' }),
+    photoId: integer('photo_id').notNull().references(() => photos.id, { onDelete: 'cascade' }),
+  },
+  (t) => [
+    // Share page: `WHERE share_id = ? AND photo_id < ? ORDER BY photo_id DESC` walks this key backwards.
+    primaryKey({ columns: [t.shareId, t.photoId] }),
+    index('share_photos_photo_idx').on(t.photoId),
+  ],
+);
+
+export const shareUsers = sqliteTable(
+  'share_users',
+  {
+    shareId: integer('share_id').notNull().references(() => shares.id, { onDelete: 'cascade' }),
+    userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.shareId, t.userId] }), index('share_users_user_idx').on(t.userId)],
+);
+
 export type User = typeof users.$inferSelect;
+export type Share = typeof shares.$inferSelect;
 export type Album = typeof albums.$inferSelect;
 export type PhotoRow = typeof photos.$inferSelect;
 export type Role = User['role'];

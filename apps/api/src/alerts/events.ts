@@ -17,6 +17,7 @@ export const AppEvents = {
   PhotoHardDeleted: 'photo.hard_deleted',
   UserChanged: 'user.changed',
   AlbumChanged: 'album.changed',
+  ShareChanged: 'share.changed',
   FavoriteAdded: 'favorite.added',
   FavoriteRemoved: 'favorite.removed',
   SaveAdded: 'save.added',
@@ -81,6 +82,16 @@ export interface AlbumChangedEvent {
   album: string;
   change: string;
 }
+export interface ShareChangedEvent {
+  actor: Actor;
+  change: 'created' | 'updated' | 'deleted';
+  title: string | null;
+  photoCount: number;
+  visibility: 'public' | 'private';
+  people: string[];
+  expiresAt: string | null;
+}
+
 export interface ErrorEvent {
   method?: string;
   path?: string;

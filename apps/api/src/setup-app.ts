@@ -13,10 +13,12 @@ import { PhotoStorage } from './photos/storage.service';
 import { PhotosRepository } from './photos/photos.repository';
 import { injectOgTags } from './share/og-tags';
 import { AlbumsService } from './albums/albums.service';
+import { SharesService } from './shares/shares.service';
 
 const SITE_NAME = 'Pre-Wedding View';
 const SHARE_PATH = /^\/photo\/(\d{1,12})\/?$/;
 const ALBUM_PATH = /^\/albums\/([a-z0-9-]{1,60})\/?$/;
+const LINK_PATH = /^\/s\/([A-Za-z0-9_-]{16,64})\/?$/;
 
 /** index.html, re-read only when the file changes (a web rebuild without an API restart). */
 function htmlReader(path: string) {
@@ -82,6 +84,7 @@ export function setupApp(app: NestExpressApplication, config: AppConfig) {
       const readIndex = htmlReader(indexHtml);
       const repo = app.get(PhotosRepository, { strict: false });
       const albumsService = app.get(AlbumsService, { strict: false });
+      const sharesService = app.get(SharesService, { strict: false });
       // SPA fallback for client-side routes (/favorite, /save, /photo/:id, ...). Every page carries
       // Open Graph tags; a /photo/:id page gets that photo's title, caption and share card, and an
       // /albums/:slug page the album's name, description and cover.
@@ -103,6 +106,8 @@ export function setupApp(app: NestExpressApplication, config: AppConfig) {
         const shared = m ? repo.findById(Number(m[1]), null) : undefined;
         const am = ALBUM_PATH.exec(req.path);
         const album = am ? albumsService.findPublicForShare(am[1]) : undefined;
+        const lm = LINK_PATH.exec(req.path);
+        const link = lm ? sharesService.findPublicForOg(lm[1]) : undefined;
         const cardOf = (r: { id: number; previewFilename?: string | null; thumbFilename: string }) =>
           `${origin}/api/v1/photos/${r.id}/og.jpg?v=${encodeURIComponent((r.previewFilename ?? r.thumbFilename).slice(0, 8))}`;
         if (shared && !shared.deletedAt) {
@@ -123,6 +128,17 @@ export function setupApp(app: NestExpressApplication, config: AppConfig) {
             description: album.description || `${album.photoCount} photo${album.photoCount === 1 ? '' : 's'} from our pre-wedding gallery.`,
             url: `${origin}/albums/${album.slug}`,
             imageAlt: album.name,
+          };
+          if (coverRow) og.image = cardOf(coverRow);
+        } else if (lm) {
+          // A private link's card gives nothing away; a public one shows its title and newest photo.
+          const n = link?.photoCount ?? 0;
+          const coverRow = link?.cover ? repo.findById(link.cover.id, null) : undefined;
+          og = {
+            ...og,
+            title: `${link ? link.title || `${n} photo${n === 1 ? '' : 's'}` : 'Photos shared with you'} · ${SITE_NAME}`,
+            description: link ? `${link.createdBy.username} shared ${n} photo${n === 1 ? '' : 's'} from our pre-wedding gallery.` : 'Log in to see the photos shared with you.',
+            url: `${origin}/s/${lm[1]}`,
           };
           if (coverRow) og.image = cardOf(coverRow);
         }

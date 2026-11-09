@@ -5,7 +5,7 @@ import { BadRequestException } from '@nestjs/common';
  * cursor from one list can't be replayed against another. Everything is validated before it
  * gets anywhere near SQL.
  */
-export type CursorKind = 'p' | 'a' | 'f' | 's' | 'b';
+export type CursorKind = 'p' | 'a' | 'f' | 's' | 'b' | 'h';
 export interface IdCursor {
   id: number;
 }
@@ -38,7 +38,7 @@ function decodeRaw(cursor: string, kind: CursorKind, keys: string[]): Record<str
   return rec as Record<string, number>;
 }
 
-export function decodeIdCursor(cursor: string | undefined, kind: 'p' | 'a' | 'b'): IdCursor | null {
+export function decodeIdCursor(cursor: string | undefined, kind: 'p' | 'a' | 'b' | 'h'): IdCursor | null {
   if (cursor === undefined || cursor === '') return null;
   const r = decodeRaw(cursor, kind, ['id']);
   return { id: r.id };

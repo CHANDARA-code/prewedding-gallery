@@ -14,6 +14,7 @@ import {
   PhotosExportedEvent,
   PhotosRotatedEvent,
   PhotosUploadedEvent,
+  ShareChangedEvent,
   UserChangedEvent,
 } from './events';
 
@@ -105,6 +106,15 @@ export class AlertsListener {
   @OnEvent(AppEvents.AlbumChanged)
   onAlbumChanged(p: AlbumChangedEvent) {
     this.alerts.notify('admin', `🗂️ ${who(p.actor)} · album <b>${e(p.album)}</b>: ${e(p.change)}`);
+  }
+
+  @OnEvent(AppEvents.ShareChanged)
+  onShareChanged(p: ShareChangedEvent) {
+    const name = p.title ? ` <b>${e(p.title)}</b>` : '';
+    const forWhom = p.visibility === 'public' ? 'anyone with the link' : p.people.map(e).join(', ') || 'nobody yet';
+    const until = p.expiresAt ? ` · expires ${p.expiresAt.slice(0, 10)}` : '';
+    const icon = { created: '🔗', updated: '🔗', deleted: '⛓️‍💥' }[p.change];
+    this.alerts.notify('engagement', `${icon} ${who(p.actor)} ${p.change} a share link${name} · ${p.photoCount} photo(s) for ${forWhom}${until}`);
   }
 
   @OnEvent(AppEvents.PhotosExported)
