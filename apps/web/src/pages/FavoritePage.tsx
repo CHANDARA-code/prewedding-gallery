@@ -2,11 +2,11 @@ import { RequireAuth } from '../auth/RequireAuth';
 import { emptyStates, GalleryView } from '../components/GalleryView';
 import { ExportCsvButton } from '../components/ExportCsvButton';
 import { useAuth } from '../auth/AuthContext';
-import { useAlbumSelect } from '../components/AlbumSelectTools';
+import { usePhotoSelect } from '../components/PhotoSelectTools';
 
 export function FavoritePage() {
   const { can } = useAuth();
-  const { selection, selectButton, actions } = useAlbumSelect();
+  const { selection, selectButton, actions } = usePhotoSelect();
   return (
     <RequireAuth label="favorites">
       {(can('photos.export') || selectButton) && (

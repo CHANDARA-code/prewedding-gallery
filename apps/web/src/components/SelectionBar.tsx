@@ -23,7 +23,12 @@ export function SelectionBar({ selection, photos, children }: { selection: Selec
       <span className="selection-count" aria-live="polite">
         {n === 0 ? 'Tap photos to select' : `${n} selected`}
       </span>
-      <Button size="small" type="link" onClick={() => (allLoaded ? selection.clear() : selection.add(photos.map((p) => p.id)))}>
+      <Button
+        size="small"
+        type="link"
+        title={allLoaded ? undefined : `Select all (${/Mac|iP(hone|ad)/.test(navigator.platform) ? '⌘' : 'Ctrl+'}A)`}
+        onClick={() => (allLoaded ? selection.clear() : selection.add(photos.map((p) => p.id)))}
+      >
         {allLoaded ? 'Clear' : `Select all ${photos.length} shown`}
       </Button>
       <span className="selection-actions">{children}</span>

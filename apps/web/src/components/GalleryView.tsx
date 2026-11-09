@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button, Divider, Empty, Result } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import { flattenPages, usePhotoList } from '../api/photos';
-import type { AdminStatus, Scope } from '../api/types';
+import type { AdminStatus, Photo, Scope } from '../api/types';
 import { errorMessage } from '../api/client';
 import { useColumns } from '../hooks/useColumns';
 import { supportsIntersectionObserver, useInfiniteSentinel } from '../hooks/useInfiniteSentinel';
@@ -19,10 +19,10 @@ interface Props {
   /** Album slug (scope 'album'). */
   album?: string;
   empty: ReactNode;
-  /** While `selection.active`, tapping a photo selects it (shift-click selects a range). */
+  /** While `selection.active`, tapping a photo selects it (shift-click selects a range; Ctrl/Cmd+A selects all). */
   selection?: Selection;
-  /** Buttons for the selection bar, given the selected ids in grid order. */
-  selectionActions?: (ids: number[]) => ReactNode;
+  /** Buttons for the selection bar, given the selected photos in grid order. */
+  selectionActions?: (photos: Photo[]) => ReactNode;
 }
 
 export function GalleryView({ scope, status, album, empty, selection, selectionActions }: Props) {
@@ -100,6 +100,22 @@ export function GalleryView({ scope, status, album, empty, selection, selectionA
     [selection, photos, openAt],
   );
 
+  // Ctrl+A / Cmd+A selects every loaded photo (and enters select mode), like a file manager.
+  useEffect(() => {
+    if (!selection || photos.length === 0) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() !== 'a' || !(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t?.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"]')) return;
+      if (document.querySelector('.viewer, .ant-modal-wrap')) return;
+      e.preventDefault();
+      selection.start();
+      selection.add(photos.map((p) => p.id));
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selection, photos]);
+
   const viewer = viewerId !== null && (
     <PhotoViewer
       photos={photos}
@@ -119,7 +135,7 @@ export function GalleryView({ scope, status, album, empty, selection, selectionA
       {viewer}
       {selection?.active && (
         <SelectionBar selection={selection} photos={photos}>
-          {selectionActions?.(photos.filter((p) => selection.ids.has(p.id)).map((p) => p.id))}
+          {selectionActions?.(photos.filter((p) => selection.ids.has(p.id)))}
         </SelectionBar>
       )}
     </>

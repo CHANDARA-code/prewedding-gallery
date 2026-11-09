@@ -8,7 +8,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { api } from './client';
-import { PAGE_SIZE } from '../config';
+import { API_URL, PAGE_SIZE } from '../config';
 import type { AdminStatus, Photo, PhotoPage, Scope } from './types';
 
 type Pages = InfiniteData<PhotoPage, string | undefined>;
@@ -208,17 +208,66 @@ export function useUpdatePhoto() {
   });
 }
 
-/** Rotates how a photo is displayed everywhere; every cached list and detail picks up the new renderings. */
+/** Copies a rotation's new rendering (size, thumbnail, preview) into every cached list and the detail. */
+function applyRotated(qc: QueryClient, u: Photo) {
+  const patch = { width: u.width, height: u.height, thumbUrl: u.thumbUrl, previewUrl: u.previewUrl, rotation: u.rotation };
+  updateCachedPhotos(qc, (item) => (item.id === u.id ? { ...item, ...patch } : item));
+  qc.setQueryData<Photo>(photoKey(u.id), (old) => (old ? { ...old, ...patch } : u));
+}
+
 export function useRotate() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, degrees }: { id: number; degrees: 90 | -90 | 180 }) =>
       api.post<Photo>(`/admin/photos/${id}/rotate`, { degrees }).then((r) => r.data),
-    onSuccess: (u) => {
-      const patch = { width: u.width, height: u.height, thumbUrl: u.thumbUrl, previewUrl: u.previewUrl, rotation: u.rotation };
-      updateCachedPhotos(qc, (item) => (item.id === u.id ? { ...item, ...patch } : item));
-      qc.setQueryData<Photo>(photoKey(u.id), (old) => (old ? { ...old, ...patch } : u));
+    onSuccess: (u) => applyRotated(qc, u),
+    // An album cover may be one of them.
+    onSettled: () => qc.invalidateQueries({ queryKey: ['albums'] }),
+  });
+}
+
+/** Photos per rotate request: each takes the server about a second to re-render. */
+export const ROTATE_BATCH = 8;
+
+export interface RotateManyResult {
+  rotated: number;
+  /** Ids the server couldn't re-render, plus any not sent because a request failed. */
+  failed: number[];
+  /** Set when a request failed part-way; photos before it were rotated. */
+  error?: unknown;
+}
+
+/** Rotates a selection in batches, updating the grid as each batch comes back. */
+export function useRotateMany() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      ids,
+      degrees,
+      onProgress,
+    }: {
+      ids: number[];
+      degrees: 90 | -90 | 180;
+      onProgress?: (done: number, total: number) => void;
+    }): Promise<RotateManyResult> => {
+      const result: RotateManyResult = { rotated: 0, failed: [] };
+      for (let i = 0; i < ids.length; i += ROTATE_BATCH) {
+        const batch = ids.slice(i, i + ROTATE_BATCH);
+        try {
+          const { data } = await api.post<{ photos: Photo[]; failed: number[] }>('/admin/photos/rotate', { photoIds: batch, degrees });
+          data.photos.forEach((u) => applyRotated(qc, u));
+          result.rotated += data.photos.length;
+          result.failed.push(...data.failed);
+        } catch (error) {
+          result.failed.push(...ids.slice(i));
+          result.error = error;
+          break;
+        }
+        onProgress?.(Math.min(i + ROTATE_BATCH, ids.length), ids.length);
+      }
+      return result;
     },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['albums'] }),
   });
 }
 
@@ -231,10 +280,17 @@ export interface CsvExport {
   mine?: boolean;
   /** Only photos in this album (its id). */
   album?: number;
+  /** Only these photos (a selection). */
+  ids?: number[];
 }
 
-export async function downloadPhotosCsv({ status = 'all', collection = 'all', mine = false, album }: CsvExport = {}) {
-  const params = { status, ...(collection !== 'all' && { collection, mine }), ...(album !== undefined && { album }) };
+export async function downloadPhotosCsv({ status = 'all', collection = 'all', mine = false, album, ids }: CsvExport = {}) {
+  const params = {
+    status,
+    ...(collection !== 'all' && { collection, mine }),
+    ...(album !== undefined && { album }),
+    ...(ids?.length && { ids: ids.join(',') }),
+  };
   const res = await api.get<Blob>('/admin/photos/export.csv', { params, responseType: 'blob' });
   const disposition = String(res.headers['content-disposition'] ?? '');
   const name = /filename="([^"]+)"/.exec(disposition)?.[1] ?? `prewedding-photos-${status}.csv`;
@@ -276,6 +332,87 @@ export function useUpload() {
     onSuccess: () => {
       // Lists restart from the first page so the new photos appear at the top.
       qc.resetQueries({ queryKey: ['photos'] });
+    },
+  });
+}
+
+/* ---------- selection batches ---------- */
+
+/** Most photos per ZIP (the API's limit); bigger selections download as several ZIPs. */
+export const ZIP_MAX = 200;
+
+/**
+ * Downloads the originals of `ids` as ZIPs through a plain link, so the browser streams them to disk
+ * with its own progress bar. Returns how many ZIPs were started.
+ */
+export function downloadPhotosZip(ids: number[]): number {
+  const parts: number[][] = [];
+  for (let i = 0; i < ids.length; i += ZIP_MAX) parts.push(ids.slice(i, i + ZIP_MAX));
+  parts.forEach((part, i) =>
+    // Browsers drop back-to-back downloads; space them out.
+    setTimeout(() => {
+      const a = Object.assign(document.createElement('a'), { href: `${API_URL}/photos/download.zip?ids=${part.join(',')}`, download: '' });
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }, i * 1500),
+  );
+  return parts.length;
+}
+
+/** Favorite / save (or undo) every selected photo in one request. */
+export function useBatchToggle(kind: ToggleKind) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ids, on }: { ids: number[]; on: boolean }) =>
+      api.post<{ changed: number }>(`/me/${kind === 'favorite' ? 'favorites' : 'saves'}/batch`, { photoIds: ids, on }).then((r) => r.data),
+    onSuccess: (_res, { ids, on }) => {
+      const flag = flagOf(kind);
+      const set = new Set(ids);
+      updateCachedPhotos(qc, (item, key) => {
+        if (!set.has(item.id)) return item;
+        if (!on && key[1] === kind) return null;
+        return { ...item, [flag]: on };
+      });
+      for (const id of ids) {
+        const detail = qc.getQueryData<Photo>(photoKey(id));
+        if (detail) qc.setQueryData<Photo>(photoKey(id), { ...detail, [flag]: on });
+      }
+      if (on) qc.invalidateQueries({ queryKey: ['photos', kind], refetchType: 'none' });
+    },
+  });
+}
+
+export type AdminBatch = 'trash' | 'restore' | 'purge';
+
+/** Trash / restore / permanently delete a selection; every list and album refreshes. */
+export function useAdminBatch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ action, ids }: { action: AdminBatch; ids: number[] }) =>
+      api.post<{ changed: number }>(`/admin/photos/${action}`, { photoIds: ids }).then((r) => r.data),
+    onSuccess: (_res, { ids }) => {
+      qc.invalidateQueries({ queryKey: ['photos'] });
+      qc.invalidateQueries({ queryKey: ['albums'] });
+      for (const id of ids) qc.removeQueries({ queryKey: photoKey(id) });
+    },
+  });
+}
+
+/** Sets the title and/or caption of a selection (undefined keeps, '' clears). */
+export function useBatchEdit() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ids, title, caption }: { ids: number[]; title?: string; caption?: string }) =>
+      api.patch<{ changed: number }>('/admin/photos', { photoIds: ids, title, caption }).then((r) => r.data),
+    onSuccess: (_res, { ids, title, caption }) => {
+      const set = new Set(ids);
+      const patch = {
+        ...(title !== undefined && { title: title || null }),
+        ...(caption !== undefined && { caption: caption || null }),
+      };
+      updateCachedPhotos(qc, (item) => (set.has(item.id) ? { ...item, ...patch } : item));
+      for (const id of ids) qc.setQueryData<Photo>(photoKey(id), (old) => (old ? { ...old, ...patch } : old));
     },
   });
 }

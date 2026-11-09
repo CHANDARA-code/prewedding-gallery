@@ -992,8 +992,14 @@ body:has(.selection-bar) .content {
     width: 100%;
     margin-inline-start: 0;
   }
+  /* Icon buttons share the first row; labelled ones (Add to album…, Restore) get a full row below. */
   .selection-actions .ant-btn {
-    flex: 1;
+    flex: 1 1 100%;
+    order: 1;
+  }
+  .selection-actions .ant-btn.icon-action {
+    flex: 1 0 40px;
+    order: 0;
   }
 }
 @media (min-width: 576px) and (max-width: 991.98px) {

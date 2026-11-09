@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Segmented } from 'antd';
 import { ExportCsvButton } from '../components/ExportCsvButton';
-import { useAlbumSelect } from '../components/AlbumSelectTools';
+import { usePhotoSelect } from '../components/PhotoSelectTools';
 import type { AdminStatus } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { emptyStates, GalleryView } from '../components/GalleryView';
@@ -14,7 +14,7 @@ export function AllPage() {
   const seesTrash = can('photos.delete');
   const canExport = can('photos.export');
   const [status, setStatus] = useState<AdminStatus>(lastAdminStatus);
-  const { selection, selectButton, actions } = useAlbumSelect();
+  const { selection, selectButton, actions } = usePhotoSelect();
 
   const statusLabel = { active: 'Active photos', deleted: 'Photos in trash', all: 'All photos incl. trash' }[status];
   const toolbar = (seesTrash || canExport || selection) && (

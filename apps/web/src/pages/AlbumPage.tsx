@@ -2,13 +2,11 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { App, Button, Dropdown, Empty, Popconfirm, Result, Skeleton, Tag } from 'antd';
 import {
-  CheckSquareOutlined,
   DeleteOutlined,
   EditOutlined,
   ExclamationCircleFilled,
   EyeInvisibleOutlined,
   EyeOutlined,
-  FolderAddOutlined,
   LeftOutlined,
   MinusCircleOutlined,
   MoreOutlined,
@@ -26,8 +24,7 @@ import { GalleryView } from '../components/GalleryView';
 import { GridSkeleton } from '../components/PhotoGrid';
 import { ExportCsvButton } from '../components/ExportCsvButton';
 import { AlbumFormModal } from '../components/AlbumFormModal';
-import { AlbumPickerModal } from '../components/AlbumPickerModal';
-import type { SelectForState } from '../components/AlbumSelectTools';
+import { SelectButton, SelectionActions, type SelectForState } from '../components/PhotoSelectTools';
 
 export function AlbumPage() {
   const { slug = '' } = useParams();
@@ -126,6 +123,7 @@ export function AlbumPage() {
         <Button icon={<ShareAltOutlined aria-hidden />} onClick={share}>
           Share
         </Button>
+        {!selection.active && n > 0 && <SelectButton selection={selection} />}
         <ExportCsvButton
           main={{ key: 'album', label: 'This album', album: a.id }}
           more={[
@@ -138,11 +136,6 @@ export function AlbumPage() {
             <Button icon={<PlusOutlined aria-hidden />} onClick={addPhotos}>
               Add photos
             </Button>
-            {!selection.active && n > 0 && (
-              <Button icon={<CheckSquareOutlined aria-hidden />} onClick={selection.start}>
-                Select
-              </Button>
-            )}
             <Dropdown
               trigger={['click']}
               placement="bottomRight"
@@ -182,8 +175,14 @@ export function AlbumPage() {
             )}
           </Empty>
         }
-        selection={manage ? selection : undefined}
-        selectionActions={(ids) => <AlbumSelectionActions album={a} ids={ids} selection={selection} />}
+        selection={selection}
+        selectionActions={(selected) => (
+          <SelectionActions
+            selected={selected}
+            selection={selection}
+            extra={manage && <AlbumSelectionActions album={a} ids={selected.map((p) => p.id)} selection={selection} />}
+          />
+        )}
       />
 
       {editing && (
@@ -197,12 +196,11 @@ export function AlbumPage() {
   );
 }
 
-/** Select-mode actions inside an album: set the cover, remove from the album, copy to another album. */
+/** Album-only select-mode actions for album managers: set the cover, remove from this album. */
 function AlbumSelectionActions({ album, ids, selection }: { album: Album; ids: number[]; selection: Selection }) {
   const { message } = App.useApp();
   const change = useAlbumPhotos();
   const update = useUpdateAlbum();
-  const [picking, setPicking] = useState<number[] | null>(null);
   const none = ids.length === 0;
   const isCover = ids.length === 1 && album.cover?.id === ids[0] && album.coverPhotoId !== null;
 
@@ -231,9 +229,6 @@ function AlbumSelectionActions({ album, ids, selection }: { album: Album; ids: n
           {isCover ? 'Automatic cover' : 'Set as cover'}
         </Button>
       )}
-      <Button disabled={none} icon={<FolderAddOutlined aria-hidden />} onClick={() => setPicking(ids)}>
-        Add to album…
-      </Button>
       <Popconfirm
         title={`Remove ${ids.length} photo${ids.length === 1 ? '' : 's'} from “${album.name}”?`}
         description="The photos stay in the gallery."
@@ -245,7 +240,6 @@ function AlbumSelectionActions({ album, ids, selection }: { album: Album; ids: n
           Remove
         </Button>
       </Popconfirm>
-      {picking && <AlbumPickerModal photoIds={picking} onClose={() => setPicking(null)} />}
     </>
   );
 }
