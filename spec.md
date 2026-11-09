@@ -647,7 +647,7 @@ Admin-curated sets of photos (e.g. *Barsat Angkor Wat*) that anyone can browse. 
 
 | Action | Who | API |
 | --- | --- | --- |
-| Download originals as ZIP | everyone | `GET /photos/download.zip?ids=1,2,3` (active photos, up to 200 per ZIP, stored not deflated, exact `Content-Length`; the web app starts one ZIP per 200) |
+| Download originals as ZIP | everyone | `GET /photos/download.zip?ids=1,2,3` (active photos, up to 200 per ZIP, files keep their original names with ` (2)`… on clashes, stored not deflated, exact `Content-Length`; the web app starts one ZIP per 200) |
 | Favorite / unfavorite, save / unsave | signed in | `POST /me/favorites/batch`, `POST /me/saves/batch` `{photoIds, on}` (active photos only, idempotent) |
 | Rotate left / right | `photos.edit` | `POST /admin/photos/rotate` `{photoIds (≤24), degrees}` → `{photos, failed}`; the web app sends 8 at a time (≈1 s per photo to re-render) with a progress toast |
 | Edit title / caption | `photos.edit` | `PATCH /admin/photos` `{photoIds, title?, caption?}` (omitted keeps, `""` clears) |
