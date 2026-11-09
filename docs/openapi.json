@@ -2022,6 +2022,415 @@
         ]
       }
     },
+    "/api/v1/me/shares": {
+      "get": {
+        "description": "Links you made, private links shared with you, and (admins) everyone else’s.",
+        "operationId": "SharesController_mine",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MySharesDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "My share links",
+        "tags": [
+          "Shares"
+        ]
+      }
+    },
+    "/api/v1/shares/people": {
+      "get": {
+        "description": "Active accounts other than you, by name, for private links.",
+        "operationId": "SharesController_people",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PersonDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "People to share with",
+        "tags": [
+          "Shares"
+        ]
+      }
+    },
+    "/api/v1/shares": {
+      "post": {
+        "description": "From a selection of photos. `public`: anyone with the link can view. `private`: only `userIds` (signed in), you and admins.",
+        "operationId": "SharesController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateShareDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a share link",
+        "tags": [
+          "Shares"
+        ]
+      }
+    },
+    "/api/v1/shares/{id}": {
+      "patch": {
+        "description": "Title, who can open it, or expiry. Its creator or an admin.",
+        "operationId": "SharesController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateShareDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update a share link",
+        "tags": [
+          "Shares"
+        ]
+      },
+      "delete": {
+        "description": "The link stops working. The photos are untouched. Its creator or an admin.",
+        "operationId": "SharesController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete a share link",
+        "tags": [
+          "Shares"
+        ]
+      }
+    },
+    "/api/v1/shares/{token}": {
+      "get": {
+        "description": "Public links: anyone. Private: 401 for guests, 403 for people it was not shared with. Expired: 410.",
+        "operationId": "SharesController_get",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Open a share link",
+        "tags": [
+          "Shares"
+        ]
+      }
+    },
+    "/api/v1/shares/{token}/photos": {
+      "get": {
+        "description": "Newest first, cursor-paginated (same shape as `GET /photos`). Same access rules as the link.",
+        "operationId": "SharesController_photos",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Page size. Clamped to 1-60.",
+            "schema": {
+              "minimum": 1,
+              "maximum": 60,
+              "default": 24,
+              "example": 24,
+              "type": "number"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Opaque cursor from the previous page's `nextCursor`. Omit for the first page.",
+            "schema": {
+              "example": "eyJrIjoicCIsImlkIjoxMDB9",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhotoListDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Photos in a share link",
+        "tags": [
+          "Shares"
+        ]
+      }
+    },
     "/api/v1/albums": {
       "get": {
         "description": "Every album, newest first, with photo count and cover. Public. Hidden albums are included only for accounts with `albums.manage`.",
@@ -3298,6 +3707,226 @@
           "width",
           "height"
         ]
+      },
+      "PersonDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 4
+          },
+          "username": {
+            "type": "string",
+            "example": "dara"
+          }
+        },
+        "required": [
+          "id",
+          "username"
+        ]
+      },
+      "ShareDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 7
+          },
+          "token": {
+            "type": "string",
+            "example": "q8WcR1vX0yKp3mTz5LbN2a",
+            "description": "The unguessable part of the link."
+          },
+          "path": {
+            "type": "string",
+            "example": "/s/q8WcR1vX0yKp3mTz5LbN2a",
+            "description": "Path of the share page on the web app."
+          },
+          "title": {
+            "type": "string",
+            "example": "For Mom & Dad",
+            "nullable": true
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "public",
+              "private"
+            ],
+            "description": "`public`: anyone with the link. `private`: only the listed people (signed in), the creator and admins."
+          },
+          "photoCount": {
+            "type": "number",
+            "example": 24,
+            "description": "Active (not trashed) photos in the link."
+          },
+          "cover": {
+            "nullable": true,
+            "description": "Newest photo in the link.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AlbumCoverDto"
+              }
+            ]
+          },
+          "createdBy": {
+            "$ref": "#/components/schemas/PersonDto"
+          },
+          "createdAt": {
+            "type": "string",
+            "example": "2026-11-09T08:30:00.000Z"
+          },
+          "expiresAt": {
+            "type": "string",
+            "example": null,
+            "nullable": true,
+            "description": "When the link stops working (null = never)."
+          },
+          "expired": {
+            "type": "boolean",
+            "example": false
+          },
+          "canManage": {
+            "type": "boolean",
+            "example": true,
+            "description": "The caller can edit or delete this link (its creator, or an admin)."
+          },
+          "people": {
+            "description": "Who a private link is for. Only sent to people who can manage the link.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PersonDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "token",
+          "path",
+          "title",
+          "visibility",
+          "photoCount",
+          "cover",
+          "createdBy",
+          "createdAt",
+          "expiresAt",
+          "expired",
+          "canManage"
+        ]
+      },
+      "MySharesDto": {
+        "type": "object",
+        "properties": {
+          "created": {
+            "description": "Links you created, newest first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShareDto"
+            }
+          },
+          "received": {
+            "description": "Private links shared with you (not expired), newest first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShareDto"
+            }
+          },
+          "others": {
+            "description": "Admins only: everyone else's links.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShareDto"
+            }
+          }
+        },
+        "required": [
+          "created",
+          "received"
+        ]
+      },
+      "CreateShareDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "example": "For Mom & Dad",
+            "nullable": true
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "public",
+              "private"
+            ],
+            "default": "public"
+          },
+          "userIds": {
+            "example": [
+              4
+            ],
+            "description": "Account ids a private link is for (required when private).",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "expiresInDays": {
+            "type": "number",
+            "example": 30,
+            "nullable": true,
+            "description": "Days until the link stops working (1–365); null or omitted = never."
+          },
+          "photoIds": {
+            "example": [
+              12,
+              9,
+              4
+            ],
+            "description": "1 to 5000 photo ids. Missing or trashed ones are skipped.",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "photoIds"
+        ]
+      },
+      "UpdateShareDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "example": "For Mom & Dad",
+            "nullable": true
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "public",
+              "private"
+            ],
+            "default": "public"
+          },
+          "userIds": {
+            "example": [
+              4
+            ],
+            "description": "Account ids a private link is for (required when private).",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "expiresInDays": {
+            "type": "number",
+            "example": 30,
+            "nullable": true,
+            "description": "Days until the link stops working (1–365); null or omitted = never."
+          }
+        }
       },
       "AlbumDto": {
         "type": "object",

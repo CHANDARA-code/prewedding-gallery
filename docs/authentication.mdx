@@ -78,6 +78,9 @@ Admins cannot demote, disable or delete themselves, and the last active admin ca
 | `GET /photos`, `GET /photos/{id}`, `GET /photos/download.zip?ids=` | ✅ | ✅ (with flags; deleted ones with `photos.delete`) | ✅ (can view deleted) |
 | `GET /me/favorites`, `GET /me/saves` | `401` | ✅ | ✅ |
 | `PUT` / `DELETE /photos/{id}/favorite` and `/save`, `POST /me/favorites/batch` and `/me/saves/batch` | `401` | ✅ | ✅ |
+| `POST /shares`, `GET /me/shares`, `GET /shares/people` | `401` | ✅ | ✅ |
+| `PATCH` / `DELETE /shares/{id}` | `401` | own links, else `404` | ✅ (any link) |
+| `GET /shares/{token}` and `/photos` | public links ✅, private `401` | public ✅, private only if chosen (else `403`) | ✅ |
 | `/admin/photos/*` | `401` | per granted permission, else `403` | ✅ |
 | `/admin/users/*` | `401` | `403` | ✅ |
 

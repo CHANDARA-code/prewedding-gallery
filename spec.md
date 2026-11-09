@@ -2,7 +2,7 @@
 
 A photo gallery for pre-wedding photos. Anyone can browse. Logged-in users can favorite and save photos. An admin can upload photos and delete them (soft or hard).
 
-- **Version:** 1.3 (adds batch actions on selected photos; 1.2 added albums; 1.1 added cursor pagination, infinite scroll, API and DB performance work)
+- **Version:** 1.4 (adds share links; 1.3 added batch actions on selected photos; 1.2 added albums; 1.1 added cursor pagination, infinite scroll, API and DB performance work)
 - **Date:** 2026-11-08
 
 ---
@@ -657,3 +657,24 @@ Admin-curated sets of photos (e.g. *Barsat Angkor Wat*) that anyone can browse. 
 | Delete forever | `photos.purge` | `POST /admin/photos/purge` `{photoIds}` |
 
 Batch bodies take 1–1000 ids (rotate ≤24) and return `{changed}`; unknown ids are skipped. Trash, restore and purge confirm first and end select mode; favorite, save and rotate keep the selection so a mistake is one tap to undo. Each batch sends one Telegram alert, not one per photo.
+
+## 13. Share links (v1.4)
+
+Anyone signed in can turn a selection into a link (link button in the selection bar). Each link is a random 22-character token at `/s/<token>` with an optional title and expiry (never, 1, 7, 30 or 90 days).
+
+- **Anyone with the link** (`public`): guests can open it, browse the photos in the viewer and download them.
+- **Only people I choose** (`private`): the chosen accounts must log in. Guests get `401` (the page asks them to log in), other accounts get `403`. The creator and admins can always open it.
+- Expired links return `410` (the creator and admins still see them). Deleting a link never touches the photos; trashed photos are hidden from a link until restored.
+- **Shared links** in the account menu (`/shares`) lists *Shared with me* (private links for you), *My links*, and for admins *Everyone else's links*, with copy, edit (title, who, expiry) and delete.
+- Public links get an Open Graph card (title, count and newest photo). A private link's card says only "Photos shared with you".
+- The select bar's counter shows "N photos selected", and Ctrl+A / ⌘A also shows how many it picked.
+
+| Endpoint | Who |
+| --- | --- |
+| `POST /shares` `{photoIds (≤5000), title?, visibility, userIds?, expiresInDays?}` | signed in |
+| `GET /shares/people` (accounts to share with) | signed in |
+| `GET /me/shares` → `{created, received, others?}` | signed in |
+| `PATCH` / `DELETE /shares/{id}` | creator or admin |
+| `GET /shares/{token}`, `GET /shares/{token}/photos` (cursor-paginated) | per the link's visibility |
+
+Tables: `shares`, `share_photos` (keyset over `(share_id, photo_id)`) and `share_users` (migration `0005_shares`). Creating, editing and deleting a link sends a Telegram alert.
