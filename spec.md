@@ -2,8 +2,8 @@
 
 A photo gallery for pre-wedding photos. Anyone can browse. Logged-in users can favorite and save photos. An admin can upload photos and delete them (soft or hard).
 
-- **Version:** 1.4 (adds share links; 1.3 added batch actions on selected photos; 1.2 added albums; 1.1 added cursor pagination, infinite scroll, API and DB performance work)
-- **Date:** 2026-11-08
+- **Version:** 1.5 (adds refresh tokens and "Keep me signed in"; 1.4 added share links; 1.3 added batch actions on selected photos; 1.2 added albums; 1.1 added cursor pagination, infinite scroll, API and DB performance work)
+- **Date:** 2026-11-09
 
 ---
 
@@ -193,7 +193,7 @@ Base URL: `/api/v1`. JSON everywhere except upload (`multipart/form-data`). Stat
 
 ### 6.1 Authentication
 
-- `POST /auth/login` with `{ username, password }` returns `{ accessToken, tokenType: "Bearer", expiresIn, user }`.
+- `POST /auth/login` with `{ username, password, remember? }` returns `{ accessToken, tokenType: "Bearer", expiresIn, user }` and sets the refresh cookie.
 - JWT payload: `{ sub: userId, username, role }`. Signed HS256 with `JWT_SECRET`. Default TTL is 1 hour (`JWT_EXPIRES_IN=1h`).
 - Clients send `Authorization: Bearer <token>`.
 - Guards:
@@ -202,12 +202,20 @@ Base URL: `/api/v1`. JSON everywhere except upload (`multipart/form-data`). Stat
   - `RolesGuard` with `@Roles('admin')` for admin endpoints.
 - Invalid credentials return `401` with a generic message. The response must not reveal whether the username exists.
 - Login is rate limited (`@nestjs/throttler`, 5 attempts per minute per IP).
+- **Refresh tokens** (`refresh_tokens` table, `RefreshTokensService`):
+  - Login sets `pw_refresh`: an HttpOnly, `SameSite=Lax` cookie (`Secure` in production) on path `/api/v1/auth` holding 32 random bytes. Only its SHA-256 is stored, with the user, a session `family`, the user's `token_version`, `remember`, the user agent and `expires_at`.
+  - `remember` (default `true`): the cookie and the session last `REFRESH_REMEMBER_DAYS` (60) since last use. `false`: a browser-session cookie, and the session lasts `REFRESH_SESSION_HOURS` (12) since last use.
+  - `POST /auth/refresh` rotates: it revokes the presented token, links it to its successor, and returns a new access token. A token rotated less than 60 s ago is still accepted (two tabs at once) and gets its own successor. An older one, a version mismatch (password reset, disable) or a disabled account revokes the whole family. `401` clears the cookie.
+  - `POST /auth/logout` revokes the cookie's family and clears it.
+  - Expired rows, and rows revoked over 7 days ago, are pruned at each login.
 
 ### 6.2 Endpoint Summary
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| POST | `/auth/login` | Public | Exchange credentials for a JWT |
+| POST | `/auth/login` | Public | Exchange credentials for a JWT and a refresh cookie |
+| POST | `/auth/refresh` | Refresh cookie | New access token; rotates the cookie |
+| POST | `/auth/logout` | Public | End the cookie's session |
 | GET | `/auth/me` | User | Current user profile |
 | GET | `/photos` | Public (optional JWT) | List active photos, newest first, **cursor-paginated** (6.6) |
 | GET | `/photos/:id` | Public (optional JWT) | Photo detail (404 if soft-deleted, unless admin) |
@@ -283,6 +291,8 @@ PORT=3000
 DATABASE_URL=./data/app.db
 JWT_SECRET=change-me-to-a-long-random-string
 JWT_EXPIRES_IN=1h
+REFRESH_REMEMBER_DAYS=60
+REFRESH_SESSION_HOURS=12
 UPLOAD_DIR=./uploads
 MAX_UPLOAD_MB=15
 WEB_ORIGIN=http://localhost:5173
@@ -411,10 +421,13 @@ An Ant Design `Tabs` component (`items` API, `centered`, sticky at the top under
 - Header (above the tabs): app title on the left, and on the right either a **Log in** button (guest) or the username with a dropdown (**Log out**) for logged-in users. Admins see an **Admin** badge.
 
 ### 7.2 Login
-- Ant Design `Modal` with a `Form` (username, password). Submit calls `POST /auth/login`.
+- Ant Design `Modal` with a `Form` (username, password, and a **Keep me signed in** checkbox, checked by default). Submit calls `POST /auth/login` with `remember`.
 - On success: store the token, fetch `/auth/me`, close the modal, and show a success `message`.
 - On `401`: show an inline error alert, "Invalid username or password".
-- Token storage: `localStorage` (key `pw_token`), attached by an Axios request interceptor. A response interceptor clears the session on `401` and reopens the login modal. (Tradeoff: `localStorage` is exposed to XSS. Acceptable for this app's threat model. Use httpOnly cookies if the scope grows.)
+- Token storage: the short-lived access token in `localStorage` (key `pw_token`), attached by an Axios request interceptor. The refresh token is only in the HttpOnly cookie; `localStorage` key `pw_session` marks that one probably exists, so guests never call `/auth/refresh`.
+- Silent refresh: the request interceptor calls `POST /auth/refresh` when the access token is missing or expires within 60 s; the response interceptor refreshes once on a `401` and retries the request. Refreshes are single-flight per tab and serialised across tabs with the Web Locks API (a waiting tab reuses the token another tab just stored). A timer every 5 minutes and tab focus also refresh early. On app start a remembered user is signed back in from the cookie.
+- Only when the refresh itself returns `401` does the app clear the session and reopen the login modal. Network errors keep the session.
+- Logout calls `POST /auth/logout`. Logging out in one tab logs out the others (`storage` event).
 - The login form shows a small hint line in dev builds only (`import.meta.env.DEV`): "Demo: demo / password".
 
 ### 7.3 Gallery Grid

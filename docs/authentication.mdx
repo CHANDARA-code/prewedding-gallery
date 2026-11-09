@@ -1,11 +1,11 @@
 ---
 title: Authentication
-description: JWT bearer tokens, token lifetime, roles, permissions and what each can call.
+description: JWT bearer tokens, refresh sessions, token lifetime, roles, permissions and what each can call.
 ---
 
 ## Getting a token
 
-`POST /auth/login` with a JSON body `{ "username": "...", "password": "..." }` returns:
+`POST /auth/login` with a JSON body `{ "username": "...", "password": "...", "remember": true }` returns:
 
 ```json
 {
@@ -20,10 +20,31 @@ description: JWT bearer tokens, token lifetime, roles, permissions and what each
 - Usernames are case-insensitive (stored lowercase).
 - Every authenticated request re-reads the account, so role and permission changes apply immediately. Disabling an
   account or resetting its password bumps `ver` and ends all its existing sessions (`401`).
-- The default lifetime is **1 hour** (`expiresIn` is in seconds). There are no refresh tokens: log in again when a
-  request returns `401`.
+- Access tokens last **1 hour** (`expiresIn` is in seconds). Get a new one with `POST /auth/refresh` (below) instead of
+  logging in again.
 - Wrong credentials return `401` with a generic message, whether or not the username exists.
 - Login is rate limited to **5 attempts per minute per IP**. Further attempts return `429`.
+
+## Staying signed in (refresh tokens)
+
+Login also sets an **HttpOnly** cookie, `pw_refresh` (path `/api/v1/auth`, `SameSite=Lax`, `Secure` in production).
+Scripts can't read it; the browser sends it to the auth endpoints only.
+
+| Endpoint | Does |
+|---|---|
+| `POST /auth/refresh` | Uses the cookie to return a new `{ accessToken, tokenType, expiresIn, user }` and **rotates** the cookie. `401` when there is no valid session (the cookie is then cleared). Limited to 30 per minute per IP |
+| `POST /auth/logout` | Ends the cookie's session and clears it (`204`). Access tokens already issued stay valid until they expire |
+
+- `remember: true` (the default, the web app's **Keep me signed in** box): the session lasts **60 days since it was
+  last used** (`REFRESH_REMEMBER_DAYS`) and survives closing the browser. Each refresh extends it.
+- `remember: false`: a browser-session cookie, and the session ends after **12 hours** unused (`REFRESH_SESSION_HOURS`).
+- Every refresh issues a new refresh token. Presenting one that was already used more than 60 seconds earlier is treated
+  as theft and ends that whole session. (Within 60 seconds it is accepted, so two tabs refreshing at once both work.)
+- Resetting the password or disabling the account ends all refresh sessions too.
+- The server stores only a SHA-256 hash of each refresh token.
+
+The web app refreshes automatically about a minute before the access token expires, when a tab comes back into view,
+and once more after any `401`; tabs share the result.
 
 ## Sending the token
 
@@ -73,7 +94,7 @@ Admins cannot demote, disable or delete themselves, and the last active admin ca
 
 | Endpoint | Guest | User | Admin |
 |---|:-:|:-:|:-:|
-| `POST /auth/login` | ✅ | ✅ | ✅ |
+| `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout` | ✅ | ✅ | ✅ |
 | `GET /auth/me` | `401` | ✅ | ✅ |
 | `GET /photos`, `GET /photos/{id}`, `GET /photos/download.zip?ids=` | ✅ | ✅ (with flags; deleted ones with `photos.delete`) | ✅ (can view deleted) |
 | `GET /me/favorites`, `GET /me/saves` | `401` | ✅ | ✅ |
