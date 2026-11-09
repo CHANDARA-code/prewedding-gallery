@@ -52,8 +52,14 @@ const SLIDE_MS = 4000;
 /** Gap between photos while swiping, and how long a slide to the next one takes. */
 const GAP = 24;
 const SLIDE_ANIM_MS = 260;
-/** Desktop: the controls fade out after the mouse rests this long. */
+/** Desktop: the controls fade out after the mouse rests this long, */
 const IDLE_MS = 2600;
+/** ...and this long after a photo is opened, even if the mouse never moves. */
+const OPEN_IDLE_MS = 1800;
+/** Mouse travel (px) that counts as "the user moved the mouse" (ignores jitter and synthetic events). */
+const WAKE_PX = 3;
+
+const finePointer = () => typeof window !== 'undefined' && !!window.matchMedia?.('(hover: hover) and (pointer: fine)').matches;
 const INFO_KEY = 'pw_viewer_info';
 
 const readInfoPref = () => {
@@ -264,14 +270,40 @@ export function PhotoViewer({ photos, photoId, onNavigate, onClose, hasNextPage,
   const idle = useRef<number | undefined>(undefined);
   const overControls = useRef(false);
   const busyOverlay = shareOpen || albumsOpen || moreOpen;
-  const wake = useCallback(() => {
-    setChrome(true);
+  const lastMouse = useRef<{ x: number; y: number } | null>(null);
+  // Entering full screen moves things under a resting cursor, which can fire a mousemove: ignore those.
+  const quietUntil = useRef(0);
+  const hideLater = useCallback((ms: number) => {
     window.clearTimeout(idle.current);
     idle.current = window.setTimeout(() => {
       if (!overControls.current) setChrome(false);
-    }, IDLE_MS);
+    }, ms);
   }, []);
-  useEffect(() => () => window.clearTimeout(idle.current), []);
+  const wake = useCallback(() => {
+    setChrome(true);
+    hideLater(IDLE_MS);
+  }, [hideLater]);
+  const hideNow = useCallback(() => {
+    window.clearTimeout(idle.current);
+    overControls.current = false;
+    quietUntil.current = Date.now() + 600;
+    setChrome(false);
+  }, []);
+  /** Mouse moved over the viewer: bring the controls back (they hide again when it rests). */
+  const onMouseMove = (e: ReactPointerEvent) => {
+    if (e.pointerType !== 'mouse' || pointers.current.size) return;
+    const last = lastMouse.current;
+    lastMouse.current = { x: e.clientX, y: e.clientY };
+    // The first event only gives a reference point; after that, real travel is needed.
+    if (!last || Math.hypot(e.clientX - last.x, e.clientY - last.y) < WAKE_PX) return;
+    if (Date.now() < quietUntil.current) return;
+    wake();
+  };
+  // Opening a photo: show the controls briefly, then let the photo have the screen (mouse devices).
+  useEffect(() => {
+    if (finePointer()) hideLater(OPEN_IDLE_MS);
+    return () => window.clearTimeout(idle.current);
+  }, [hideLater]);
   // Never hide while a menu or dialog is up.
   useEffect(() => {
     if (busyOverlay) {
@@ -307,10 +339,16 @@ export function PhotoViewer({ photos, photoId, onNavigate, onClose, hasNextPage,
     return () => document.removeEventListener('fullscreenchange', onFs);
   }, []);
 
+  // Full screen (F) is for looking at the photo: the controls slide away until the mouse moves.
   const toggleFullscreen = useCallback(() => {
-    if (document.fullscreenElement) void document.exitFullscreen?.();
-    else void rootRef.current?.requestFullscreen?.().catch(() => undefined);
-  }, []);
+    if (document.fullscreenElement) {
+      void document.exitFullscreen?.();
+      wake();
+    } else {
+      void rootRef.current?.requestFullscreen?.().catch(() => undefined);
+      hideNow();
+    }
+  }, [wake, hideNow]);
 
   const setInfo = useCallback((open: boolean) => {
     setInfoOpen(open);
@@ -427,7 +465,6 @@ export function PhotoViewer({ photos, photoId, onNavigate, onClose, hasNextPage,
   };
 
   const onPointerMove = (e: ReactPointerEvent) => {
-    if (e.pointerType === 'mouse' && !pointers.current.size) wake();
     if (!pointers.current.has(e.pointerId)) return;
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const g = gesture.current;
@@ -602,8 +639,15 @@ export function PhotoViewer({ photos, photoId, onNavigate, onClose, hasNextPage,
       role="dialog"
       aria-modal="true"
       aria-label={photo ? `Photo ${photo.title ?? photo.id}` : 'Photo viewer'}
-      onPointerMove={(e) => e.pointerType === 'mouse' && !pointers.current.size && wake()}
-      onFocus={() => setChrome(true)}
+      onPointerMove={onMouseMove}
+      onFocus={(e) => {
+        // Keyboard focus (Tab) shows the controls; focus returning to a button after a menu click doesn't.
+        try {
+          if ((e.target as HTMLElement).matches(':focus-visible')) wake();
+        } catch {
+          /* old browsers */
+        }
+      }}
     >
       <div className="viewer-backdrop" style={{ opacity: 1 - Math.min(0.7, closing / 350) }} />
 

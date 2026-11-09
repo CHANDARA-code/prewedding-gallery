@@ -497,11 +497,15 @@ body:has(.viewer) .ant-float-btn {
   color: #f1f1f1;
 }
 
-/* Top bar and bottom area float over the photo on soft scrims, and fade away together. */
+/* Top bar and bottom area float over the photo on soft scrims; they slide out of the way together
+   (photo opened and left alone, or full screen) and glide back when the mouse moves. */
 .viewer-bar,
 .viewer-bottom,
 .viewer-nav {
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  transition:
+    opacity 0.32s ease,
+    transform 0.38s cubic-bezier(0.2, 0.8, 0.2, 1),
+    visibility 0s linear 0s;
 }
 .viewer-bar {
   position: absolute;
@@ -627,7 +631,7 @@ body:has(.viewer) .ant-float-btn {
   z-index: 2;
   opacity: 0;
 }
-.viewer-canvas:hover .viewer-nav,
+.viewer:not(.viewer-chrome-hidden) .viewer-canvas:hover .viewer-nav,
 .viewer-nav:focus-visible {
   opacity: 1;
 }
@@ -734,19 +738,32 @@ body:has(.viewer) .ant-float-btn {
   font-size: 12px;
 }
 
-.viewer-chrome-hidden .viewer-bar {
-  opacity: 0;
-  transform: translateY(-8px);
-  pointer-events: none;
-}
-.viewer-chrome-hidden .viewer-bottom {
-  opacity: 0;
-  transform: translateY(8px);
-}
-.viewer-chrome-hidden .viewer-bottom > *,
+.viewer-chrome-hidden .viewer-bar,
+.viewer-chrome-hidden .viewer-bottom,
 .viewer-chrome-hidden .viewer-nav {
   opacity: 0;
   pointer-events: none;
+  /* Hide from clicks only after the slide-out has finished. */
+  transition:
+    opacity 0.45s ease,
+    transform 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+    visibility 0s linear 0.5s;
+  visibility: hidden;
+}
+.viewer-chrome-hidden .viewer-bar {
+  transform: translateY(-100%);
+}
+.viewer-chrome-hidden .viewer-bottom {
+  transform: translateY(60%);
+}
+.viewer-chrome-hidden .viewer-bottom > * {
+  pointer-events: none;
+}
+.viewer-chrome-hidden .viewer-prev {
+  transform: translateX(-24px);
+}
+.viewer-chrome-hidden .viewer-next {
+  transform: translateX(24px);
 }
 
 /* Details: a side panel on desktop, a bottom sheet on phones. */

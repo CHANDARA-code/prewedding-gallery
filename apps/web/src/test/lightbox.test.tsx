@@ -99,4 +99,25 @@ describe('photo viewer', () => {
     fireEvent.pointerUp(stage, { pointerId: 1, clientX: 150, clientY: 205, pointerType: 'touch' });
     await waitFor(() => expect(viewerImg()).toHaveAttribute('src', '/uploads/previews/8.webp'));
   });
+
+  it('slides the controls away on F and brings them back when the mouse moves', async () => {
+    mockIntersectionObserver();
+    mockApi(({ url }) => (url === '/photos' ? { status: 200, data: page([9, 8], null) } : { status: 200, data: makePhoto(Number(url.split('/').pop())) }));
+    const user = userEvent.setup();
+    renderApp('/?photo=9');
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).not.toHaveClass('viewer-chrome-hidden');
+
+    await user.keyboard('f');
+    expect(dialog).toHaveClass('viewer-chrome-hidden');
+
+    // Jitter right after hiding is ignored; a real mouse move shows them again.
+    const stage = document.querySelector('.viewer-stage')!;
+    await new Promise((r) => setTimeout(r, 650));
+    fireEvent.pointerMove(stage, { pointerId: 1, clientX: 100, clientY: 100, pointerType: 'mouse' });
+    fireEvent.pointerMove(stage, { pointerId: 1, clientX: 101, clientY: 100, pointerType: 'mouse' });
+    expect(dialog).toHaveClass('viewer-chrome-hidden');
+    fireEvent.pointerMove(stage, { pointerId: 1, clientX: 140, clientY: 130, pointerType: 'mouse' });
+    await waitFor(() => expect(dialog).not.toHaveClass('viewer-chrome-hidden'));
+  });
 });
