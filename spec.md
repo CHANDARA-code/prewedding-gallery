@@ -2,7 +2,7 @@
 
 A photo gallery for pre-wedding photos. Anyone can browse. Logged-in users can favorite and save photos. An admin can upload photos and delete them (soft or hard).
 
-- **Version:** 1.5 (adds refresh tokens and "Keep me signed in"; 1.4 added share links; 1.3 added batch actions on selected photos; 1.2 added albums; 1.1 added cursor pagination, infinite scroll, API and DB performance work)
+- **Version:** 1.6 (Google Photos-style viewer and mouse selection; 1.5 added refresh tokens and "Keep me signed in"; 1.4 added share links; 1.3 added batch actions on selected photos; 1.2 added albums; 1.1 added cursor pagination, infinite scroll, API and DB performance work)
 - **Date:** 2026-11-09
 
 ---
@@ -691,3 +691,19 @@ Anyone signed in can turn a selection into a link (link button in the selection 
 | `GET /shares/{token}`, `GET /shares/{token}/photos` (cursor-paginated) | per the link's visibility |
 
 Tables: `shares`, `share_photos` (keyset over `(share_id, photo_id)`) and `share_users` (migration `0005_shares`). Creating, editing and deleting a link sends a Telegram alert.
+
+## 14. Viewer and mouse selection (v1.6)
+
+**Viewer**, modelled on Google Photos; every earlier feature and shortcut is kept:
+
+- The photo fills the screen on black. The top bar (back, date taken or added, "N of M", tools) and the bottom area (filmstrip, and on phones a labelled Share · Favorite · Save · Download · Album bar) float over it on gradients. With a mouse they fade out after ~2.6 s at rest and come back on movement; on touch a tap toggles them. They never hide while a menu or dialog is open.
+- Desktop tools: share, zoom −/%/+, details, favorite, save and ⋮. The ⋮ menu has download original (D), slideshow (Space, with a progress line), full screen (F, where supported), add to album (`albums.manage`) and rotate left / right (`photos.edit`).
+- Neighbouring photos are rendered beside the current one, so swiping or dragging slides them in like a carousel (rubber-band at the ends); arrows and ←/→ animate the same way. Swipe up opens details, swipe down closes (the photo shrinks and the backdrop fades as you pull); with the details sheet open on a phone, swipe down closes the sheet.
+- Details: a 360 px side panel on desktop, a bottom sheet with a handle on phones, both with a close button.
+- Respects `prefers-reduced-motion`. The page's floating Upload button is hidden while the viewer is open.
+
+**Selecting with a mouse** (every list with select mode):
+
+- Hovering a photo shows a check circle; clicking it enters select mode with that photo selected.
+- Ctrl/⌘-click selects instead of opening; shift-click selects a range from the last photo.
+- Press and drag anywhere on the grid to draw a selection box: every photo it touches is added to the selection, the page auto-scrolls near the window's top or bottom edge, and Esc cancels the drag. Hits are computed from the grid layout, so photos in rows scrolled out of view still count.
